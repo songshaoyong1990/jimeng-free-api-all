@@ -148,6 +148,11 @@ function getVideoResolutionFallbacks(
 
 const VIDEO_PROCESSING_STATES = [20, 42, 45];
 
+export type VideoGenerationQueryResult =
+  | { status: "processing" }
+  | { status: "completed"; url: string }
+  | { status: "failed"; message: string };
+
 function extractVideoUrlFromItemList(itemList: any[] = []) {
   for (const item of itemList) {
     const url =
@@ -238,6 +243,29 @@ function detectVideoDuration(prompt: string): number | null {
  * @returns 视频URL
  */
 export async function generateVideo(
+  _model: string,
+  prompt: string,
+  options: {
+    ratio?: string;
+    resolution?: string;
+    duration?: number;
+    filePaths?: string[];
+  },
+  refreshToken: string
+) {
+  const historyId = await submitVideoGeneration(
+    _model,
+    prompt,
+    options,
+    refreshToken
+  );
+  return waitForVideoUrl(historyId, refreshToken);
+}
+
+/**
+ * 提交视频生成任务，返回即梦 history_record_id
+ */
+export async function submitVideoGeneration(
   _model: string,
   prompt: string,
   {
@@ -501,81 +529,88 @@ export async function generateVideo(
   if (!historyId)
     throw new APIException(EX.API_VIDEO_GENERATION_FAILED, "记录ID不存在");
 
-  // 轮询获取结果
-  let status = 20,
-    failCode,
-    item_list = [];
+  return String(historyId);
+}
+
+/**
+ * 单次查询视频生成状态（供异步 API / 客户端轮询）
+ */
+export async function queryVideoGenerationStatus(
+  historyId: string | number,
+  refreshToken: string,
+  pollAttempt = 0
+): Promise<VideoGenerationQueryResult> {
+  const requestUrl = "/mweb/v1/get_history_by_ids";
+  const requestData = { history_ids: [historyId] };
+  const useAlternativeApi = pollAttempt > 10 && pollAttempt % 2 === 0;
+
+  let result;
+  if (useAlternativeApi) {
+    result = await request("post", "/mweb/v1/get_history_records", refreshToken, {
+      data: { history_record_ids: [historyId] },
+    });
+  } else {
+    result = await request("post", requestUrl, refreshToken, {
+      data: requestData,
+    });
+  }
+
+  const responseVideoUrl = extractVideoUrlFromResponse(result);
+  if (responseVideoUrl) return { status: "completed", url: responseVideoUrl };
+
+  let historyData;
+  if (useAlternativeApi && result.history_records?.length)
+    historyData = result.history_records[0];
+  else if (result.history_list?.length) historyData = result.history_list[0];
+
+  if (!historyData) return { status: "processing" };
+
+  const item_list = historyData.item_list || [];
+  const tempVideoUrl = extractVideoUrlFromItemList(item_list);
+  if (tempVideoUrl) return { status: "completed", url: tempVideoUrl };
+
+  if (historyData.status === 30) {
+    return {
+      status: "failed",
+      message: `生成失败: ${historyData.fail_code || "unknown"}`,
+    };
+  }
+
+  if (VIDEO_PROCESSING_STATES.includes(historyData.status)) {
+    return { status: "processing" };
+  }
+
+  const finalUrl = extractVideoUrlFromItemList(item_list);
+  if (finalUrl) return { status: "completed", url: finalUrl };
+
+  return { status: "processing" };
+}
+
+async function waitForVideoUrl(
+  historyId: string | number,
+  refreshToken: string
+): Promise<string> {
   let retryCount = 0;
-  const maxRetries = 60; // 20 mins
+  const maxRetries = 60;
 
   await new Promise((resolve) => setTimeout(resolve, 5000));
-
   logger.info(`开始轮询视频生成结果，历史ID: ${historyId}`);
 
-  while (VIDEO_PROCESSING_STATES.includes(status) && retryCount < maxRetries) {
+  while (retryCount < maxRetries) {
     try {
-      const requestUrl = "/mweb/v1/get_history_by_ids";
-      const requestData = { history_ids: [historyId] };
-
-      let result;
-      // Alternative API logic (simplified for brevity but keeping robustness)
-      let useAlternativeApi = retryCount > 10 && retryCount % 2 === 0;
-
-      if (useAlternativeApi) {
-        result = await request(
-          "post",
-          "/mweb/v1/get_history_records",
-          refreshToken,
-          {
-            data: { history_record_ids: [historyId] },
-          }
-        );
-      } else {
-        result = await request("post", requestUrl, refreshToken, {
-          data: requestData,
-        });
+      const state = await queryVideoGenerationStatus(
+        historyId,
+        refreshToken,
+        retryCount
+      );
+      if (state.status === "completed") return state.url;
+      if (state.status === "failed") {
+        throw new APIException(EX.API_VIDEO_GENERATION_FAILED, state.message);
       }
-
-      const responseVideoUrl = extractVideoUrlFromResponse(result);
-      if (responseVideoUrl) return responseVideoUrl;
-
-      // Parse history
-      let historyData;
-      if (useAlternativeApi && result.history_records?.length)
-        historyData = result.history_records[0];
-      else if (result.history_list?.length)
-        historyData = result.history_list[0];
-
-      if (!historyData) {
-        retryCount++;
-        await new Promise((r) =>
-          setTimeout(r, Math.min(2000 * retryCount, 30000))
-        );
-        continue;
-      }
-
-      status = historyData.status;
-      failCode = historyData.fail_code;
-      item_list = historyData.item_list || [];
-
-      // Extraction Check
-      const tempVideoUrl = extractVideoUrlFromItemList(item_list);
-
-      if (tempVideoUrl) return tempVideoUrl; // Found it
-
-      if (status === 30) {
-        throw new APIException(
-          EX.API_VIDEO_GENERATION_FAILED,
-          `生成失败: ${failCode}`
-        );
-      }
-
-      if (VIDEO_PROCESSING_STATES.includes(status)) {
-        retryCount++;
-        await new Promise((r) =>
-          setTimeout(r, 2000 * Math.min(retryCount + 1, 5))
-        );
-      }
+      retryCount++;
+      await new Promise((r) =>
+        setTimeout(r, 2000 * Math.min(retryCount + 1, 5))
+      );
     } catch (e) {
       if (e instanceof APIException) throw e;
       logger.error(`轮询出错: ${e.message}`);
@@ -584,19 +619,101 @@ export async function generateVideo(
     }
   }
 
-  // Timeout
-  if (retryCount >= maxRetries) {
-    throw new APIException(EX.API_VIDEO_GENERATION_FAILED, "超时");
+  throw new APIException(EX.API_VIDEO_GENERATION_FAILED, "超时");
+}
+
+export async function resolveVideoGenerationUrl(
+  historyId: string | number,
+  refreshToken: string
+) {
+  return waitForVideoUrl(historyId, refreshToken);
+}
+
+/**
+ * 带自动降级重试的视频任务提交（仅提交，不等待完成）
+ */
+export async function submitVideoWithRetry(
+  _model: string,
+  prompt: string,
+  options: {
+    ratio?: string;
+    resolution?: string;
+    duration?: number;
+    filePaths?: string[];
+  },
+  refreshToken: string
+): Promise<string> {
+  const modelConfig = await resolveVideoModelConfig(_model, refreshToken);
+  const resolutionLevels = getVideoResolutionFallbacks(
+    _model,
+    options.resolution,
+    modelConfig
+  );
+  const durationLevels = [10, 5];
+
+  let currentResIndex = Math.max(
+    0,
+    resolutionLevels.indexOf(resolutionLevels[0])
+  );
+  let currentDurIndex = Math.max(
+    0,
+    durationLevels.indexOf(options.duration || 10)
+  );
+
+  while (currentResIndex < resolutionLevels.length) {
+    while (currentDurIndex < durationLevels.length) {
+      try {
+        const currentOptions = {
+          ...options,
+          resolution: resolutionLevels[currentResIndex],
+          duration: durationLevels[currentDurIndex],
+        };
+        logger.info(
+          `尝试提交视频任务，分辨率: ${currentOptions.resolution}，时长: ${currentOptions.duration}秒`
+        );
+        return await submitVideoGeneration(
+          _model,
+          prompt,
+          currentOptions,
+          refreshToken
+        );
+      } catch (error) {
+        const isInsufficientCredits =
+          error.code === EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS[0] ||
+          (error.message &&
+            (error.message.includes("积分不足") ||
+              error.message.includes("2039") ||
+              error.message.includes("1006")));
+
+        if (!isInsufficientCredits) throw error;
+
+        if (currentDurIndex < durationLevels.length - 1) {
+          currentDurIndex++;
+          logger.warn(
+            `积分不足，自动降级到 ${durationLevels[currentDurIndex]}秒时长重试...`
+          );
+          continue;
+        }
+
+        if (currentResIndex < resolutionLevels.length - 1) {
+          currentResIndex++;
+          currentDurIndex = 0;
+          logger.warn(
+            `积分不足，自动降级到 ${resolutionLevels[currentResIndex]} 分辨率重试...`
+          );
+          break;
+        }
+
+        throw new APIException(
+          EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS,
+          "积分不足，已自动降至最低画质与时长仍然不足，请前往即梦官网 https://jimeng.jianying.com 充值积分"
+        );
+      }
+    }
+    currentDurIndex = 0;
   }
 
-  // Final Extraction (Redundant but safe)
-  const finalUrl = extractVideoUrlFromItemList(item_list);
-  if (finalUrl) return finalUrl;
-
-  throw new APIException(
-    EX.API_VIDEO_GENERATION_FAILED,
-    `视频生成结束但未返回可用URL，状态码: ${status}${failCode ? `，失败码: ${failCode}` : ""}`
-  );
+  throw new APIException(EX.API_VIDEO_GENERATION_FAILED, "视频任务提交失败");
 }
 
 /**

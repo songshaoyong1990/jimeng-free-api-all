@@ -5,6 +5,8 @@ logs/
 
 # Database files
 data/
+release/
+
 *.db
 *.db-shm
 *.db-wal
