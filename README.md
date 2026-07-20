@@ -56,7 +56,7 @@
 - **超强模型支持**：集成图像模型（5.0 Lite/4.7/4.6/4.5/4.1/4.0/3.1/3.0/2.0 Pro）和视频模型（Seedance 2.0 Mini/Fast/Pro、Seedance 1.5 Pro、3.0 Pro/3.0/3.0 Fast/S2.0/2.0 Pro），并支持自动同步即梦官网最新模型列表。
 - **完全免费体验**：目前官方每日赠送 66 积分，支持多路 Token 轮询，最大化利用免费额度。
 - **可视化管理**：内置功能强大的 Web 管理控制台，支持实时监控和媒体管理。
-- **OpenAI 兼容**：完全兼容 OpenAI 接口格式，可直接接入大多数现有 AI 应用。
+- **OpenAI 兼容**：完全兼容 OpenAI 接口格式，可直接接入大多数现有 AI 应用；`/v1/images/generations` 可按 `model` 切换即梦或 RunningHub。
 - **零配置部署**：通过 Docker 一键启动，开箱即用。
 
 ---
@@ -88,6 +88,7 @@
 | **📝 实时日志** | 实时查看系统运行日志，支持按 `INFO` / `WARN` / `ERROR` 级别筛选，支持自动刷新和一键清理/导出日志文件。    |
 | **🖼️ 媒体回溯** | 所有生成的图片和视频都会自动记录在媒体库中，支持按类型（图片/视频）筛选，点击即可预览高清原图或播放视频。 |
 | **💳 积分追踪** | **[NEW]** 每次请求自动计算并记录消耗积分，实时更新 Token 的剩余积分，精准掌握额度使用情况。               |
+| **⚙️ RunningHub** | 对齐 infinite-canvas 渠道页：双 Key、导入默认目录 / 粘贴链接、启用 app·workflow；OpenAI 生图可免带 Authorization。 |
 
 ### 🚀 访问地址
 
@@ -190,6 +191,8 @@ npm start
 | `jimeng-image-3.1`     | 即梦 3.1 版本             | 1K (默认) |
 | `jimeng-image-3.0`     | 即梦 3.0 版本             | 1K (默认) |
 | `jimeng-image-2.0-pro` | 即梦 2.0 Pro 版本         | 仅支持 1K |
+| `app:{webappId}`       | RunningHub AI App         | 由应用定义 |
+| `workflow:{workflowId}`| RunningHub Workflow       | 由工作流定义 |
 
 ### 🎥 视频生成
 
@@ -217,18 +220,118 @@ npm start
 
 ### 2. 配置 Authorization
 
-在请求 Header 中使用 Bearer Token 方式鉴权：
+在请求 Header 中使用 Bearer Token 方式鉴权。**Key 语义随 `model` 变化**：
+
+| model | Authorization |
+| :---- | :------------ |
+| `jimeng-image-*` 等即梦模型 | 即梦官网 Cookie 中的 `sessionid`（必填） |
+| `app:{id}` / `workflow:{id}`（RunningHub） | Header 的 RH Key，或管理台已保存的 RH 币 / 余额 Key |
+
+即梦示例：
 
 ```http
 Authorization: Bearer sessionid_value
 ```
 
 **多账号支持**：
-如果有多个账号，可以用逗号分隔多个 sessionid，服务会自动轮询使用：
+如果有多个账号，可以用逗号分隔多个 token，服务会自动轮询使用：
 
 ```http
 Authorization: Bearer sessionid_1,sessionid_2,sessionid_3
 ```
+
+---
+
+## 🔀 RunningHub 生图（同一 OpenAI 接口）
+
+`POST /v1/images/generations` 按 `model` 自动切换后端：
+
+- **即梦**：`jimeng-image-*` 等（默认行为）
+- **RunningHub**：`app:` / `workflow:`（兼容 `runninghub:app:` / `runninghub:workflow:`）
+
+心智对齐 infinite-canvas：管理台 ≈ 画布「设置 → 渠道 → RunningHub」；请求里的 `model` ≈ 画布选应用/工作流；`payment` ≈ 节点计费方式。
+
+### 1. 管理台怎么配
+
+1. 打开 `http://127.0.0.1:8001` → 登录 → **RunningHub** 页  
+2. 填 **RH 币 API Key**（消费级）并保存；企业再填 **余额 API Key**  
+3. 点 **导入默认目录**，或粘贴官网链接后点 **添加并分析**（会用已保存 Key 拉取字段，统计图/提示词槽位）  
+4. 打开要用条目的「启用」开关；未分析的条目可点「重新分析」  
+5. 分析完成后点 **编辑节点**（对齐 canvas RunningHub 节点）：改计费/实例/可调参数，保存后点 **查看 API**  
+6. 可选设置默认模型并保存
+
+**查看 API** 生成 OpenAI Images 兼容请求（`model` / `prompt` / `n` / `size` / `quality` / `response_format`，有图槽时含 `images`，并附 `/v1/images/edits` 示例）。在 **编辑节点** 里可查看并修改 `prompt` / `images` / `size` / `quality` 分别对应哪个 RH 节点字段。
+
+| 项 | 说明 |
+| :--- | :--- |
+| RH 币 API Key | 消费级；请求未带 `Authorization` 且未选余额计费时使用 |
+| 余额 API Key | 企业级；条目计费选余额，或请求传 `payment: "wallet"` |
+| Base URL | 默认 `https://www.runninghub.cn` |
+| 默认模型 | 已启用的 `app:` / `workflow:`；请求未传 `model` 时使用 |
+| 目录 | 启用后出现在默认模型下拉，并加入 `GET /v1/models`；可 **编辑节点** 调参数 |
+
+### 2. 怎么调用（OpenAI Images 兼容）
+
+```http
+POST /v1/images/generations
+Content-Type: application/json
+Authorization: Bearer <RUNNINGHUB_API_KEY>
+```
+
+```json
+{
+  "model": "app:你的webappId",
+  "prompt": "一只在太空中飞行的柴犬，赛博朋克风格",
+  "n": 1,
+  "size": "1024x1024",
+  "quality": "high",
+  "response_format": "url",
+  "images": ["https://example.com/ref.png"]
+}
+```
+
+带参考图也可用官方 edits 形态（仅 RunningHub）：
+
+```http
+POST /v1/images/edits
+Authorization: Bearer <RUNNINGHUB_API_KEY>
+Content-Type: multipart/form-data
+```
+
+字段：`model`、`prompt`、`image`（文件）、可选 `n` / `size` / `quality` / `response_format`。
+
+| OpenAI 字段 | RunningHub 行为 |
+| :--- | :--- |
+| `model` / `prompt` / `response_format` | 标准映射 |
+| `n` | 连续提交最多 4 次，合并结果 |
+| `size` | 写入名称含 size/aspect/ratio/width/height 的节点字段；无匹配则忽略 |
+| `quality=high` | 未显式传 `instance_type` 时倾向 `plus` |
+| `image` / `images` / multipart | 上传后填 IMAGE 槽位 |
+| 其它（`style`、`user`、`background`…） | 忽略，不报错 |
+
+响应：
+
+```json
+{
+  "created": 1710000000,
+  "data": [{ "url": "https://..." }]
+}
+```
+
+管理台已配 Key 时可省略 Authorization。节点细节优先在「编辑节点」保存。高级覆盖：
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `payment` / `use_wallet` | `wallet` / `true` 时用余额 Key |
+| `base_url` | 请求体 > 管理台 > 环境变量 > 官网 |
+| `instance_type` | 覆盖 App 实例类型 |
+| `rh_params` / `rh_random` | 覆盖已保存节点参数（`nodeId::fieldName`） |
+
+说明：
+
+- 管理台**禁用**的条目会报错；目录为空时仍允许直接传未入库的 `app:` / `workflow:` id。  
+- `/v1/images/edits` 本阶段仅 RunningHub，不接即梦。  
+- 本版仅覆盖 RunningHub **App / Workflow（v1）**，不含标准模型 v2 / Latent。
 
 ---
 

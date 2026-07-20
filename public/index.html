@@ -185,6 +185,179 @@
         display: block;
       }
 
+      /* Config panel */
+      .config-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 640px;
+      }
+      .config-panel h3 {
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+      .config-panel .hint {
+        color: var(--text-secondary);
+        font-size: 13px;
+        line-height: 1.6;
+        margin-bottom: 20px;
+      }
+      .config-panel .form-group input {
+        font-size: 14px;
+      }
+      .config-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .config-actions .btn {
+        width: auto;
+        min-width: 120px;
+        padding: 10px 18px;
+        font-size: 14px;
+      }
+      .btn-secondary {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+      }
+      .btn-secondary:hover {
+        border-color: var(--accent);
+        background: var(--bg-secondary);
+      }
+      .btn-danger {
+        background: transparent;
+        border: 1px solid var(--error);
+        color: var(--error);
+      }
+      .btn-danger:hover {
+        background: rgba(239, 68, 68, 0.12);
+      }
+      .success-msg {
+        color: var(--success);
+        margin-top: 14px;
+        font-size: 14px;
+      }
+      .key-preview {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .key-preview code {
+        color: var(--accent-hover);
+      }
+      .config-panel.wide {
+        max-width: 860px;
+      }
+      .rh-section {
+        margin-top: 28px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+      .rh-section h4 {
+        font-size: 15px;
+        margin-bottom: 8px;
+      }
+      .rh-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0 16px;
+      }
+      .rh-toolbar input {
+        flex: 1;
+        min-width: 220px;
+        padding: 10px 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 14px;
+      }
+      .rh-entry-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .rh-entry {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+      }
+      .rh-entry .meta {
+        min-width: 0;
+        flex: 1;
+      }
+      .rh-entry .title {
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .rh-entry .id {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .rh-entry .analysis {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+      .rh-entry .analysis.ok {
+        color: var(--success);
+      }
+      .rh-entry .analysis.warn {
+        color: var(--warning);
+      }
+      .rh-entry .analysis a {
+        color: var(--accent-hover);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .rh-entry button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .rh-entry .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+      .rh-entry label.toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        margin: 0;
+      }
+      .rh-empty {
+        color: var(--text-secondary);
+        font-size: 13px;
+        padding: 12px 0;
+      }
+      .howto ol {
+        margin: 8px 0 0 18px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      .howto code {
+        color: var(--accent-hover);
+      }
+
       /* Stats Cards */
       .stats-grid {
         display: grid;
@@ -417,6 +590,12 @@
         max-width: 500px;
         width: 90%;
       }
+      .modal-content.wide {
+        max-width: 720px;
+      }
+      .modal-content.xl {
+        max-width: 1040px;
+      }
       .modal-content h2 {
         margin-bottom: 20px;
       }
@@ -427,6 +606,516 @@
         color: var(--text-secondary);
         font-size: 24px;
         cursor: pointer;
+      }
+      .api-example-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .api-example-tabs button {
+        padding: 6px 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .api-example-tabs button.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .api-example-pre {
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px;
+        overflow: auto;
+        max-height: 420px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--text-primary);
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .api-example-meta {
+        color: var(--text-secondary);
+        font-size: 13px;
+        margin-bottom: 12px;
+        line-height: 1.6;
+      }
+      .api-example-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .api-example-actions .btn {
+        width: auto;
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+      .rh-editor-form {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .rh-editor-row {
+        margin-bottom: 14px;
+      }
+      .rh-editor-row label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+      .rh-editor-row .field-key {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        opacity: 0.8;
+      }
+      .rh-editor-row input[type="text"],
+      .rh-editor-row input[type="number"],
+      .rh-editor-row textarea,
+      .rh-editor-row select {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 14px;
+      }
+      .rh-editor-row textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+      .rh-editor-inline {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .rh-editor-inline input {
+        flex: 1;
+      }
+      .rh-editor-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+      .rh-editor-badge.req {
+        border-color: var(--warning);
+        color: var(--warning);
+      }
+      .rh-editor-badge.oa {
+        border-color: var(--accent);
+        color: var(--accent-hover);
+        background: rgba(124, 58, 237, 0.12);
+      }
+
+      /* Node editor redesigned layout */
+      .rh-ed-shell {
+        display: flex;
+        flex-direction: column;
+        max-height: 90vh;
+        overflow: hidden;
+        padding: 24px;
+      }
+      .rh-ed-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+      }
+      .rh-ed-head h2 {
+        margin: 0;
+        font-size: 19px;
+      }
+      .rh-ed-head .rh-ed-model {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .rh-ed-settings {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 12px 0 16px;
+      }
+      .rh-ed-setting {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 7px 12px;
+      }
+      .rh-ed-setting > span {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .rh-ed-setting select {
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        padding: 6px 8px;
+        font-size: 13px;
+      }
+      .rh-ed-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 16px;
+        flex: 1;
+        min-height: 0;
+      }
+      @media (max-width: 880px) {
+        .rh-ed-grid {
+          grid-template-columns: 1fr;
+          overflow: auto;
+        }
+      }
+      .rh-ed-col {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-secondary);
+        overflow: hidden;
+      }
+      .rh-ed-col-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(124, 58, 237, 0.08), transparent);
+      }
+      .rh-ed-col-head h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rh-ed-col-head p {
+        margin: 5px 0 0;
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+      .rh-ed-col-body {
+        padding: 12px 14px;
+        overflow: auto;
+        flex: 1;
+        min-height: 0;
+      }
+      .rh-ed-map-item {
+        margin-bottom: 14px;
+      }
+      .rh-ed-map-item > .oa-tag {
+        display: inline-block;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        color: #fff;
+        background: var(--accent);
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+      }
+      .rh-ed-map-item .hint {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin: 2px 0 6px;
+      }
+      .rh-ed-slot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .rh-ed-slot .slot-idx {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: nowrap;
+      }
+      .rh-ed-slot select {
+        flex: 1;
+      }
+      .rh-ed-linkbtn {
+        background: none;
+        border: none;
+        color: var(--accent-hover);
+        cursor: pointer;
+        font-size: 12px;
+        padding: 2px 0;
+      }
+      .rh-field {
+        padding: 10px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+      .rh-field:last-child {
+        border-bottom: none;
+      }
+      .rh-field-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .rh-field-name {
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+      .rh-field .field-key {
+        width: 100%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        opacity: 0.65;
+      }
+      .rh-ed-footer {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-top: 16px;
+        margin-top: 16px;
+        border-top: 1px solid var(--border);
+      }
+      .rh-ed-footer .btn {
+        width: auto;
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+      .rh-ed-footer .spacer {
+        flex: 1;
+      }
+      .rh-editor-section {
+        margin: 16px 0 18px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-secondary);
+      }
+      .rh-editor-section h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .rh-editor-map-row {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 8px;
+        align-items: start;
+        margin-bottom: 10px;
+      }
+      .rh-editor-map-row .oa-name {
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: var(--accent, #3b82f6);
+        padding-top: 10px;
+      }
+      .rh-editor-checks {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 140px;
+        overflow: auto;
+      }
+      .rh-editor-checks label {
+        display: flex !important;
+        align-items: center;
+        gap: 8px;
+        margin: 0 !important;
+        font-size: 12px;
+        color: var(--text-primary);
+      }
+      .rh-editor-checks .field-key {
+        margin-left: auto;
+        opacity: 0.65;
+      }
+
+      /* Test tab */
+      .test-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .test-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .test-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .test-panel h3 {
+        margin-bottom: 16px;
+        font-size: 15px;
+      }
+      .test-panel textarea,
+      .test-panel select,
+      .test-panel input[type="file"] {
+        width: 100%;
+        padding: 12px 14px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+      .test-panel textarea {
+        resize: vertical;
+        min-height: 72px;
+      }
+      .test-panel select:focus,
+      .test-panel textarea:focus,
+      .test-panel input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .test-row {
+        display: flex;
+        gap: 10px;
+      }
+      .test-row > * {
+        flex: 1;
+      }
+      .test-seg {
+        display: flex;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .test-seg button {
+        flex: 1;
+        padding: 10px 12px;
+        background: var(--bg-secondary);
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 13px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .test-seg button.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .test-files {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .test-thumb {
+        width: 64px;
+        height: 64px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      .test-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .test-status {
+        font-size: 13px;
+        margin-bottom: 12px;
+        min-height: 18px;
+      }
+      .test-status.ok {
+        color: var(--success);
+      }
+      .test-status.err {
+        color: var(--error);
+      }
+      .test-status.pending {
+        color: var(--warning);
+      }
+      .test-result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .test-result-item {
+        position: relative;
+      }
+      .test-result-item a {
+        display: block;
+      }
+      .test-result-grid img {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-secondary);
+      }
+      .test-tag {
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        padding: 3px 8px;
+        font-size: 11px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.55);
+        color: var(--text-secondary);
+        backdrop-filter: blur(2px);
+      }
+      .test-tag.ok {
+        background: var(--success);
+        color: #fff;
+      }
+      .test-dl {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        padding: 4px 10px;
+        font-size: 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        cursor: pointer;
+        backdrop-filter: blur(2px);
+      }
+      .test-dl:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .test-placeholder {
+        color: var(--text-secondary);
+        text-align: center;
+        padding: 50px 16px;
+        border: 1px dashed var(--border);
+        border-radius: 12px;
+        font-size: 14px;
+      }
+      .test-raw-title {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 6px 0;
       }
 
       /* Loading */
@@ -496,6 +1185,8 @@
         <button class="tab-btn active" data-tab="stats">📊 统计信息</button>
         <button class="tab-btn" data-tab="logs">📋 实时日志</button>
         <button class="tab-btn" data-tab="media">🖼️ 媒体库</button>
+        <button class="tab-btn" data-tab="runninghub">⚙️ RunningHub</button>
+        <button class="tab-btn" data-tab="test">🧪 接口测试</button>
       </div>
 
       <!-- Stats Tab -->
@@ -595,6 +1286,204 @@
         </div>
         <div class="pagination" id="pagination"></div>
       </div>
+
+      <!-- RunningHub Tab -->
+      <div id="tab-runninghub" class="tab-content">
+        <div class="config-panel wide">
+          <h3>RunningHub 配置</h3>
+          <div class="howto hint">
+            对齐 infinite-canvas「渠道 → RunningHub」：先配 Key 与目录，再用 OpenAI 生图接口调用。
+            <ol>
+              <li>填写 <b>RH 币 API Key</b>（消费级）；企业再填余额 Key</li>
+              <li>导入默认目录，或粘贴官网 <code>/run/ai-app/...</code>、<code>/run/workflow/...</code> 链接</li>
+              <li>启用要用的应用/工作流，可设默认模型</li>
+              <li>
+                OpenAI 兼容：<code>POST /v1/images/generations</code>（可带
+                <code>n</code>/<code>size</code>/<code>quality</code>/<code>images</code>），
+                参考图也可用 <code>POST /v1/images/edits</code>；
+                <code>model</code> 用 <code>app:id</code> / <code>workflow:id</code>
+              </li>
+            </ol>
+          </div>
+
+          <div class="form-group">
+            <label>RH 币 API Key（消费级）</label>
+            <input
+              type="password"
+              id="rh-api-key"
+              placeholder="留空则保持原 Key 不变"
+              autocomplete="off"
+            />
+            <div class="key-preview" id="rh-key-preview">当前未配置</div>
+          </div>
+          <div class="form-group">
+            <label>余额 API Key（企业级，可选）</label>
+            <input
+              type="password"
+              id="rh-wallet-key"
+              placeholder="留空则保持原 Key 不变"
+              autocomplete="off"
+            />
+            <div class="key-preview" id="rh-wallet-preview">当前未配置</div>
+          </div>
+          <div class="form-group">
+            <label>站点 Base URL</label>
+            <input
+              type="text"
+              id="rh-base-url"
+              placeholder="https://www.runninghub.cn"
+            />
+          </div>
+          <div class="form-group">
+            <label>默认模型</label>
+            <select id="rh-default-model">
+              <option value="">不设置（请求必须传 model）</option>
+            </select>
+          </div>
+          <div class="config-actions">
+            <button class="btn" onclick="saveRunningHubConfig()">保存配置</button>
+            <button class="btn btn-secondary" onclick="loadRunningHubConfig()">
+              重新加载
+            </button>
+            <button class="btn btn-danger" onclick="clearRunningHubApiKey()">
+              清除 RH 币 Key
+            </button>
+            <button class="btn btn-danger" onclick="clearRunningHubWalletKey()">
+              清除余额 Key
+            </button>
+          </div>
+          <div id="rh-config-msg" class="success-msg" style="display: none"></div>
+          <div id="rh-config-error" class="error-msg" style="text-align: left"></div>
+
+          <div class="rh-section">
+            <h4>应用 / 工作流目录</h4>
+            <p class="hint" style="margin-bottom: 0">
+              启用后会出现在默认模型下拉，并出现在
+              <code>GET /v1/models</code>。添加链接会用已保存的 API Key
+              拉取字段并分析（提示词 / 图片槽位等）。
+            </p>
+            <div class="rh-toolbar">
+              <button class="btn btn-secondary" onclick="importRunningHubCatalog()">
+                导入默认目录
+              </button>
+              <input
+                type="text"
+                id="rh-link-input"
+                placeholder="粘贴 /run/ai-app/... 或 /run/workflow/... 链接"
+              />
+              <button class="btn btn-secondary" onclick="addRunningHubLink()">
+                添加并分析
+              </button>
+            </div>
+            <h4>AI 应用</h4>
+            <div class="rh-entry-list" id="rh-apps-list"></div>
+            <h4 style="margin-top: 18px">工作流</h4>
+            <div class="rh-entry-list" id="rh-workflows-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Tab -->
+      <div id="tab-test" class="tab-content">
+        <div class="test-grid">
+          <div class="test-panel">
+            <h3>请求参数</h3>
+            <div class="form-group">
+              <label>接口</label>
+              <div class="test-seg" id="test-endpoint">
+                <button type="button" data-ep="generations" class="active">
+                  /v1/images/generations
+                </button>
+                <button type="button" data-ep="edits">
+                  /v1/images/edits
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>模型</label>
+              <select id="test-model"></select>
+              <input
+                type="text"
+                id="test-model-custom"
+                placeholder="或手填 model（如 app:123 / workflow:456，填了则覆盖上面）"
+                style="margin-top: 8px"
+              />
+            </div>
+            <div class="form-group">
+              <label>API Key（可选；RH 模型留空则用管理台已配 RH Key）</label>
+              <input
+                type="password"
+                id="test-api-key"
+                placeholder="Bearer 后面的 key"
+                autocomplete="off"
+              />
+            </div>
+            <div class="form-group">
+              <label>Prompt</label>
+              <textarea
+                id="test-prompt"
+                rows="3"
+                placeholder="描述要生成的图片，例如：一只在太空中飞行的柴犬，赛博朋克风格"
+              ></textarea>
+            </div>
+            <div class="test-row">
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>数量 n</label>
+                <input type="number" id="test-n" value="1" min="1" max="10" />
+              </div>
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>尺寸 size</label>
+                <select id="test-size">
+                  <option value="">默认（不传）</option>
+                  <option value="auto">auto</option>
+                  <option value="1024x1024">1024x1024</option>
+                  <option value="1536x1024">1536x1024（横）</option>
+                  <option value="1024x1536">1024x1536（竖）</option>
+                </select>
+              </div>
+            </div>
+            <div class="test-row">
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>质量 quality</label>
+                <select id="test-quality">
+                  <option value="">默认（不传）</option>
+                  <option value="auto">auto</option>
+                  <option value="high">high</option>
+                  <option value="medium">medium</option>
+                  <option value="low">low</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>response_format</label>
+                <select id="test-response-format">
+                  <option value="url">url</option>
+                  <option value="b64_json">b64_json</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label id="test-images-label"
+                >参考图 image（generations 可选参考；edits 必填，可多选）</label
+              >
+              <input type="file" id="test-images" accept="image/*" multiple />
+              <div class="test-files" id="test-files"></div>
+            </div>
+            <button class="btn" id="test-send" onclick="runImageTest()">
+              🚀 发送请求
+            </button>
+          </div>
+
+          <div class="test-panel">
+            <h3>结果</h3>
+            <div id="test-status" class="test-status"></div>
+            <div id="test-result">
+              <div class="test-placeholder">
+                填写左侧参数并发送，返回的图片和原始响应会显示在这里
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Password Modal -->
@@ -614,6 +1503,45 @@
         </div>
         <button class="btn" onclick="changePassword()">确认修改</button>
         <div id="password-error" class="error-msg"></div>
+      </div>
+    </div>
+
+    <!-- RunningHub API Example Modal -->
+    <div id="rh-api-modal" class="modal">
+      <div class="modal-content wide">
+        <button class="modal-close" onclick="closeRhApiModal()">&times;</button>
+        <h2 id="rh-api-modal-title">API 示例</h2>
+        <div class="api-example-meta" id="rh-api-modal-meta"></div>
+        <div class="api-example-tabs">
+          <button class="active" data-api-tab="curl" onclick="switchRhApiTab('curl')">cURL</button>
+          <button data-api-tab="json" onclick="switchRhApiTab('json')">JSON Body</button>
+          <button data-api-tab="fetch" onclick="switchRhApiTab('fetch')">fetch</button>
+        </div>
+        <pre class="api-example-pre" id="rh-api-modal-code"></pre>
+        <div class="api-example-actions">
+          <button class="btn" onclick="copyRhApiExample()">复制当前示例</button>
+          <button class="btn btn-secondary" onclick="closeRhApiModal()">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RunningHub Node Editor Modal -->
+    <div id="rh-editor-modal" class="modal">
+      <div class="modal-content xl rh-ed-shell">
+        <button class="modal-close" onclick="closeRhEditor()">&times;</button>
+        <div class="rh-ed-head">
+          <h2 id="rh-editor-title">节点编辑</h2>
+          <span class="rh-ed-model" id="rh-editor-model"></span>
+        </div>
+        <div class="api-example-meta" id="rh-editor-meta" style="margin:0"></div>
+        <div class="rh-editor-form" id="rh-editor-form"></div>
+        <div class="rh-ed-footer">
+          <button class="btn" onclick="saveRhEditor()">保存节点参数</button>
+          <button class="btn btn-secondary" onclick="previewRhEditorApi()">查看 API</button>
+          <span class="spacer"></span>
+          <span id="rh-editor-error" class="error-msg" style="margin:0"></span>
+          <button class="btn btn-secondary" onclick="closeRhEditor()">关闭</button>
+        </div>
       </div>
     </div>
 
@@ -727,8 +1655,1273 @@
 
           if (btn.dataset.tab === "logs") loadLogs();
           else if (btn.dataset.tab === "media") loadMedia();
+          else if (btn.dataset.tab === "runninghub") loadRunningHubConfig();
+          else if (btn.dataset.tab === "test") loadTestTab();
         });
       });
+
+      // RunningHub config
+      let rhState = { rhApps: [], rhWorkflows: [], defaultModel: "" };
+      let rhApiExampleCache = { curl: "", json: "", fetch: "", active: "curl" };
+
+      function rhModelId(kind, entry) {
+        const id = kind === "app" ? entry.appId || entry.id : entry.workflowId || entry.id;
+        return kind + ":" + id;
+      }
+
+      function buildRhApiExample(kind, entry) {
+        const model = rhModelId(kind, entry);
+        const base = window.location.origin;
+        const imageCount = Number(entry.analysis?.imageCount || 0);
+        const promptCount = Number(entry.analysis?.promptCount || 0);
+        // OpenAI Images 兼容字段；节点参数/计费/实例以管理台保存为准
+        const body = {
+          model,
+          prompt: promptCount > 0 ? "一只在太空中飞行的柴犬，赛博朋克风格" : "placeholder",
+          n: 1,
+          size: "1024x1024",
+          quality: "high",
+          response_format: "url",
+        };
+        if (imageCount > 0) {
+          body.images = Array.from({ length: Math.min(imageCount, 2) }, (_, i) =>
+            `https://example.com/ref-${i + 1}.png`
+          );
+        }
+        const bodyText = JSON.stringify(body, null, 2);
+        const curl = [
+          `curl -X POST "${base}/v1/images/generations" \\`,
+          `  -H "Content-Type: application/json" \\`,
+          `  -H "Authorization: Bearer $OPENAI_API_KEY" \\`,
+          `  -d '${bodyText.replace(/'/g, "'\\''")}'`,
+        ].join("\n");
+        const editsCurl =
+          imageCount > 0
+            ? [
+                "",
+                "# 或使用 OpenAI edits（multipart 参考图）",
+                `curl -X POST "${base}/v1/images/edits" \\`,
+                `  -H "Authorization: Bearer $OPENAI_API_KEY" \\`,
+                `  -F "model=${model}" \\`,
+                `  -F "prompt=把参考图改成赛博朋克风格" \\`,
+                `  -F "n=1" \\`,
+                `  -F "size=1024x1024" \\`,
+                `  -F "response_format=url" \\`,
+                `  -F "image=@./ref.png"`,
+              ].join("\n")
+            : "";
+        const fetchCode = [
+          `const res = await fetch("${base}/v1/images/generations", {`,
+          `  method: "POST",`,
+          `  headers: {`,
+          `    "Content-Type": "application/json",`,
+          `    "Authorization": "Bearer " + process.env.OPENAI_API_KEY,`,
+          `  },`,
+          `  body: JSON.stringify(${bodyText.replace(/\n/g, "\n  ")}),`,
+          `});`,
+          `const json = await res.json();`,
+          `// OpenAI 格式：{ created, data: [{ url }] }`,
+          `console.log(json.data[0].url);`,
+        ].join("\n");
+        const savedHint = [
+          entry.rhParams && Object.keys(entry.rhParams).length ? "节点参数已保存" : null,
+          entry.payment === "wallet" ? "计费=余额" : null,
+          entry.instanceType ? "实例=" + entry.instanceType : null,
+          imageCount > 0 ? "含参考图 images / 可用 /v1/images/edits" : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return {
+          title: entry.title || model,
+          model,
+          meta:
+            "OpenAI Images 兼容（generations" +
+            (imageCount > 0 ? " + edits" : "") +
+            "）。管理台节点编辑结果由服务端自动带上。" +
+            (savedHint ? " " + savedHint + "。" : "") +
+            ` 字段 ${entry.analysis?.fieldCount || 0} · 图 ${imageCount} · 提示词 ${promptCount}。`,
+          curl: curl + editsCurl,
+          json: bodyText,
+          fetch: fetchCode,
+        };
+      }
+
+      function showRhApiExample(kind, index) {
+        const list = kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        const entry = list[index];
+        if (!entry || !entry.analysis) {
+          alert("请先分析该条目，再查看 API 示例");
+          return;
+        }
+        const example = buildRhApiExample(kind, entry);
+        rhApiExampleCache = {
+          curl: example.curl,
+          json: example.json,
+          fetch: example.fetch,
+          active: "curl",
+        };
+        document.getElementById("rh-api-modal-title").textContent =
+          "API 示例 · " + example.title;
+        document.getElementById("rh-api-modal-meta").textContent = example.meta;
+        document.querySelectorAll("#rh-api-modal .api-example-tabs button").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.apiTab === "curl");
+        });
+        document.getElementById("rh-api-modal-code").textContent = example.curl;
+        document.getElementById("rh-api-modal").classList.add("active");
+      }
+
+      function openRhApiExampleById(kind, entryId) {
+        if (!kind || !entryId) return;
+        const list = kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        const index = list.findIndex(
+          (item) =>
+            item.id === entryId ||
+            item.appId === entryId ||
+            item.workflowId === entryId
+        );
+        if (index >= 0) showRhApiExample(kind, index);
+      }
+
+      let rhEditor = null;
+      const OA_QUALITY_INSTANCE = "__instance_type__";
+
+      function rhFieldKey(field) {
+        return `${field.nodeId}::${field.fieldName}`;
+      }
+
+      function rhFieldLooksLikeSize(field) {
+        const text = `${field.fieldName || ""} ${field.label || ""} ${field.role || ""}`.toLowerCase();
+        return /size|aspect|ratio|width|height|分辨率|尺寸|比例|宽|高/.test(text);
+      }
+
+      function inferRhOpenAIMapping(fields) {
+        const list = fields || [];
+        const prompt = list.filter((f) => f.role === "prompt").map(rhFieldKey);
+        const images = list.filter((f) => f.role === "image").map(rhFieldKey);
+        const sizeField = list.find(
+          (f) => rhFieldLooksLikeSize(f) && f.role !== "image" && f.role !== "prompt"
+        );
+        return {
+          prompt,
+          images,
+          size: sizeField ? rhFieldKey(sizeField) : "",
+          quality: OA_QUALITY_INSTANCE,
+        };
+      }
+
+      function resolveRhOpenAIMapping(fields, saved) {
+        const inferred = inferRhOpenAIMapping(fields);
+        const valid = new Set((fields || []).map(rhFieldKey));
+        const filterKeys = (keys) => (keys || []).filter((key) => valid.has(key));
+        const prompt = saved && saved.prompt != null ? filterKeys(saved.prompt) : inferred.prompt;
+        const images = saved && saved.images != null ? filterKeys(saved.images) : inferred.images;
+        let size = saved && saved.size != null ? String(saved.size) : inferred.size;
+        if (size && !valid.has(size)) size = inferred.size;
+        let quality =
+          saved && saved.quality != null ? String(saved.quality) : inferred.quality;
+        if (quality && quality !== OA_QUALITY_INSTANCE && !valid.has(quality)) {
+          quality = OA_QUALITY_INSTANCE;
+        }
+        return { prompt: prompt || [], images: images || [], size: size || "", quality: quality || "" };
+      }
+
+      function openaiBadgesForField(key, mapping) {
+        const tags = [];
+        if ((mapping.prompt || []).includes(key)) tags.push("prompt");
+        const imgIdx = (mapping.images || []).indexOf(key);
+        if (imgIdx >= 0) tags.push("images[" + imgIdx + "]");
+        if (mapping.size === key) tags.push("size");
+        if (mapping.quality === key) tags.push("quality");
+        return tags
+          .map((t) => `<span class="rh-editor-badge oa">OpenAI ${escapeHtml(t)}</span>`)
+          .join("");
+      }
+
+      function fieldOptionLabel(field) {
+        return (field.label || field.fieldName || rhFieldKey(field)) + " · " + rhFieldKey(field);
+      }
+
+      function openRhEditor(kind, index) {
+        const list = kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        const entry = list[index];
+        if (!entry) return;
+        if (!(entry.fields || []).length) {
+          alert("请先重新分析以拉取完整字段，再编辑节点");
+          return;
+        }
+        rhEditor = {
+          kind,
+          index,
+          entry: JSON.parse(JSON.stringify(entry)),
+        };
+        if (!rhEditor.entry.rhParams) rhEditor.entry.rhParams = {};
+        if (!rhEditor.entry.rhRandom) rhEditor.entry.rhRandom = {};
+        if (!rhEditor.entry.payment) rhEditor.entry.payment = "coin";
+        if (rhEditor.entry.instanceType == null) rhEditor.entry.instanceType = "";
+        rhEditor.entry.openaiMapping = resolveRhOpenAIMapping(
+          rhEditor.entry.fields,
+          rhEditor.entry.openaiMapping
+        );
+        document.getElementById("rh-editor-title").textContent =
+          entry.title || "节点编辑";
+        document.getElementById("rh-editor-model").textContent = rhModelId(kind, entry);
+        document.getElementById("rh-editor-meta").textContent =
+          "左栏定义 OpenAI 请求字段落到哪个节点；右栏调节点默认值。保存后 generations/edits 按此映射填充。";
+        document.getElementById("rh-editor-error").textContent = "";
+        renderRhEditorForm();
+        document.getElementById("rh-editor-modal").classList.add("active");
+      }
+
+      function closeRhEditor() {
+        document.getElementById("rh-editor-modal").classList.remove("active");
+        rhEditor = null;
+      }
+
+      function renderRhEditorForm() {
+        const form = document.getElementById("rh-editor-form");
+        if (!rhEditor) {
+          form.innerHTML = "";
+          return;
+        }
+        const entry = rhEditor.entry;
+        const fields = entry.fields || [];
+        const mapping = resolveRhOpenAIMapping(fields, entry.openaiMapping);
+        entry.openaiMapping = mapping;
+        const editable = fields.filter(
+          (field) =>
+            field.enabled !== false &&
+            field.role !== "image" &&
+            field.role !== "video" &&
+            field.role !== "audio" &&
+            field.role !== "prompt"
+        );
+        const promptCandidates = fields.filter(
+          (f) =>
+            f.enabled !== false &&
+            f.role !== "image" &&
+            f.role !== "video" &&
+            f.role !== "audio"
+        );
+        const imageCandidates = fields.filter(
+          (f) => f.enabled !== false && (f.role === "image" || /image|img|mask/i.test(f.fieldName || ""))
+        );
+        const sizeCandidates = fields.filter(
+          (f) => f.enabled !== false && f.role !== "image" && f.role !== "video" && f.role !== "audio"
+        );
+        const imageSlots = (mapping.images && mapping.images.length
+          ? mapping.images
+          : imageCandidates.map(rhFieldKey)
+        ).slice(0, 7);
+        while (imageSlots.length < Math.min(2, imageCandidates.length)) {
+          imageSlots.push(imageCandidates[imageSlots.length] ? rhFieldKey(imageCandidates[imageSlots.length]) : "");
+        }
+
+        const fieldSelectOptions = (list, selected, includeInstance) => {
+          const opts = [`<option value="">不映射</option>`];
+          if (includeInstance) {
+            opts.push(
+              `<option value="${OA_QUALITY_INSTANCE}" ${
+                selected === OA_QUALITY_INSTANCE ? "selected" : ""
+              }>实例类型（high→plus）</option>`
+            );
+          }
+          list.forEach((f) => {
+            const key = rhFieldKey(f);
+            opts.push(
+              `<option value="${escapeHtml(key)}" ${
+                selected === key ? "selected" : ""
+              }>${escapeHtml(fieldOptionLabel(f))}</option>`
+            );
+          });
+          return opts.join("");
+        };
+
+        // ── 左栏：OpenAI 请求映射 ──
+        const mapHtml = `
+          <div class="rh-ed-col">
+            <div class="rh-ed-col-head">
+              <h3>OpenAI 请求 → 节点字段</h3>
+              <p>客户端发的 OpenAI 字段按此写入节点；「不映射」则不自动填充。</p>
+            </div>
+            <div class="rh-ed-col-body">
+              <div class="rh-ed-map-item">
+                <span class="oa-tag">prompt</span>
+                <div class="hint">勾选接收提示词的字段（可多选）</div>
+                <div class="rh-editor-checks" id="rh-map-prompt">
+                  ${
+                    promptCandidates.length
+                      ? promptCandidates
+                          .map((f) => {
+                            const key = rhFieldKey(f);
+                            const checked = mapping.prompt.includes(key) ? "checked" : "";
+                            return `<label><input type="checkbox" data-oa-prompt value="${escapeHtml(
+                              key
+                            )}" ${checked}/> <span>${escapeHtml(
+                              f.label || f.fieldName
+                            )}</span><span class="field-key">${escapeHtml(key)}</span></label>`;
+                          })
+                          .join("")
+                      : "<div class='hint'>无可用文本字段</div>"
+                  }
+                </div>
+              </div>
+
+              <div class="rh-ed-map-item">
+                <span class="oa-tag">images[]</span>
+                <div class="hint">参考图按顺序填入所选 IMAGE 字段</div>
+                <div id="rh-map-images">
+                  ${
+                    imageSlots.length
+                      ? imageSlots
+                          .map((selected, i) => {
+                            return `<div class="rh-ed-slot">
+                              <span class="slot-idx">images[${i}]</span>
+                              <select data-oa-image-slot="${i}">${fieldSelectOptions(
+                              imageCandidates,
+                              selected,
+                              false
+                            )}</select>
+                            </div>`;
+                          })
+                          .join("")
+                      : "<div class='hint'>未识别到 IMAGE 字段；重新分析后若识别为图片会出现在此</div>"
+                  }
+                  <button type="button" class="rh-ed-linkbtn" id="rh-map-add-image">+ 增加 images 槽位</button>
+                </div>
+              </div>
+
+              <div class="rh-ed-map-item">
+                <span class="oa-tag">size</span>
+                <div class="hint">写入尺寸/比例类字段</div>
+                <select id="rh-map-size">${fieldSelectOptions(sizeCandidates, mapping.size, false)}</select>
+              </div>
+
+              <div class="rh-ed-map-item">
+                <span class="oa-tag">quality</span>
+                <div class="hint">映射到实例类型，或某个节点字段</div>
+                <select id="rh-map-quality">${fieldSelectOptions(
+                  sizeCandidates,
+                  mapping.quality,
+                  true
+                )}</select>
+              </div>
+
+              <button type="button" class="rh-ed-linkbtn" id="rh-map-reset">↺ 恢复自动推断</button>
+            </div>
+          </div>
+        `;
+
+        // ── 右栏：节点参数默认值 ──
+        const allShown = [
+          ...fields.filter((f) => f.role === "prompt" && f.enabled !== false),
+          ...fields.filter((f) => f.role === "image" && f.enabled !== false),
+          ...editable,
+        ];
+        const seen = new Set();
+        const displayFields = allShown.filter((f) => {
+          const key = rhFieldKey(f);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        let paramsBody = "";
+        if (!displayFields.length) {
+          paramsBody = `<div class="rh-empty">无字段</div>`;
+        } else {
+          paramsBody = displayFields
+            .map((field) => {
+              const key = rhFieldKey(field);
+              const value =
+                entry.rhParams[key] != null ? entry.rhParams[key] : field.fieldValue || "";
+              const label = field.label || field.fieldName || key;
+              const req = field.required
+                ? `<span class="rh-editor-badge req">必填</span>`
+                : "";
+              const roleBadge = `<span class="rh-editor-badge">${escapeHtml(
+                field.role || "text"
+              )}</span>`;
+              const oaBadge = openaiBadgesForField(key, mapping);
+              let control = "";
+              if (field.role === "image" || field.role === "video" || field.role === "audio") {
+                control = `<div class="hint" style="color:var(--text-secondary);font-size:12px">由 OpenAI <code>images</code> 映射填充（见左栏）</div>`;
+              } else if (field.role === "prompt" && (mapping.prompt || []).includes(key)) {
+                control = `<input type="text" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(
+                  value
+                )}" placeholder="可选默认提示词（请求带 prompt 时优先）" />`;
+              } else if (field.role === "boolean") {
+                control = `<select data-rh-param="${escapeHtml(key)}">
+                  <option value="true" ${String(value) === "true" ? "selected" : ""}>true</option>
+                  <option value="false" ${String(value) !== "true" ? "selected" : ""}>false</option>
+                </select>`;
+              } else if (field.options && field.options.length) {
+                control = `<select data-rh-param="${escapeHtml(key)}">
+                  ${field.options
+                    .map(
+                      (opt) =>
+                        `<option value="${escapeHtml(opt)}" ${
+                          String(value) === String(opt) ? "selected" : ""
+                        }>${escapeHtml(opt)}</option>`
+                    )
+                    .join("")}
+                </select>`;
+              } else if (field.role === "number" || field.role === "slider") {
+                const randomOn =
+                  entry.rhRandom[key] === true ||
+                  (entry.rhRandom[key] !== false && field.random_enabled && !value);
+                control = `
+                  <div class="rh-editor-inline">
+                    <input type="number" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(value)}"
+                      ${field.min != null ? `min="${escapeHtml(field.min)}"` : ""}
+                      ${field.max != null ? `max="${escapeHtml(field.max)}"` : ""}
+                      ${field.step != null ? `step="${escapeHtml(field.step)}"` : ""}
+                      ${randomOn ? "disabled" : ""} />
+                    ${
+                      field.random_enabled
+                        ? `<label class="toggle"><input type="checkbox" data-rh-random="${escapeHtml(
+                            key
+                          )}" ${randomOn ? "checked" : ""}/> 随机</label>`
+                        : ""
+                    }
+                  </div>`;
+              } else {
+                control = `<input type="text" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(
+                  value
+                )}" />`;
+              }
+              return `
+                <div class="rh-field">
+                  <div class="rh-field-head">
+                    <span class="rh-field-name">${escapeHtml(label)}</span>
+                    ${roleBadge} ${req} ${oaBadge}
+                    <span class="field-key">${escapeHtml(key)}</span>
+                  </div>
+                  ${control}
+                </div>
+              `;
+            })
+            .join("");
+        }
+
+        const paramsHtml = `
+          <div class="rh-ed-col">
+            <div class="rh-ed-col-head">
+              <h3>节点参数默认值 <span class="rh-editor-badge">${displayFields.length}</span></h3>
+              <p>未被请求覆盖时使用；带蓝色 OpenAI 徽章的字段由左栏映射填充。</p>
+            </div>
+            <div class="rh-ed-col-body">
+              ${paramsBody}
+            </div>
+          </div>
+        `;
+
+        form.innerHTML = `
+          <div class="rh-ed-settings">
+            <div class="rh-ed-setting">
+              <span>计费方式</span>
+              <select id="rh-editor-payment">
+                <option value="coin" ${entry.payment !== "wallet" ? "selected" : ""}>RH 币（消费级）</option>
+                <option value="wallet" ${entry.payment === "wallet" ? "selected" : ""}>账户余额（企业）</option>
+              </select>
+            </div>
+            <div class="rh-ed-setting">
+              <span>实例类型（App）</span>
+              <select id="rh-editor-instance">
+                <option value="" ${!entry.instanceType ? "selected" : ""}>24G 默认</option>
+                <option value="plus" ${entry.instanceType === "plus" ? "selected" : ""}>48G plus</option>
+              </select>
+            </div>
+          </div>
+          <div class="rh-ed-grid">
+            ${mapHtml}
+            ${paramsHtml}
+          </div>
+        `;
+        form.querySelectorAll("[data-rh-random]").forEach((el) => {
+          el.addEventListener("change", () => {
+            const key = el.getAttribute("data-rh-random");
+            const input = form.querySelector(`[data-rh-param="${CSS.escape(key)}"]`);
+            if (input) input.disabled = el.checked;
+          });
+        });
+        const addBtn = document.getElementById("rh-map-add-image");
+        if (addBtn) {
+          addBtn.addEventListener("click", () => {
+            collectRhEditorMappingIntoEntry();
+            const cur = rhEditor.entry.openaiMapping.images || [];
+            cur.push("");
+            rhEditor.entry.openaiMapping.images = cur;
+            renderRhEditorForm();
+          });
+        }
+        const resetBtn = document.getElementById("rh-map-reset");
+        if (resetBtn) {
+          resetBtn.addEventListener("click", () => {
+            rhEditor.entry.openaiMapping = inferRhOpenAIMapping(rhEditor.entry.fields);
+            renderRhEditorForm();
+          });
+        }
+      }
+
+      function collectRhEditorMappingIntoEntry() {
+        if (!rhEditor) return;
+        const prompt = [];
+        document.querySelectorAll("#rh-editor-form [data-oa-prompt]:checked").forEach((el) => {
+          if (el.value) prompt.push(el.value);
+        });
+        const images = [];
+        document.querySelectorAll("#rh-editor-form [data-oa-image-slot]").forEach((el) => {
+          images.push(el.value || "");
+        });
+        const sizeEl = document.getElementById("rh-map-size");
+        const qualityEl = document.getElementById("rh-map-quality");
+        rhEditor.entry.openaiMapping = {
+          prompt,
+          images: images.filter((key, idx) => key || idx < images.length),
+          size: sizeEl ? sizeEl.value : "",
+          quality: qualityEl ? qualityEl.value : "",
+        };
+        // drop trailing empty image slots but keep intentional empties in middle? keep non-empty only for save
+        rhEditor.entry.openaiMapping.images = images.filter(Boolean);
+      }
+
+      function collectRhEditorDraft() {
+        if (!rhEditor) return null;
+        const entry = rhEditor.entry;
+        entry.payment = document.getElementById("rh-editor-payment").value;
+        entry.instanceType = document.getElementById("rh-editor-instance").value;
+        collectRhEditorMappingIntoEntry();
+        const rhParams = { ...(entry.rhParams || {}) };
+        const rhRandom = { ...(entry.rhRandom || {}) };
+        document.querySelectorAll("#rh-editor-form [data-rh-param]").forEach((el) => {
+          const key = el.getAttribute("data-rh-param");
+          rhParams[key] = el.value;
+        });
+        document.querySelectorAll("#rh-editor-form [data-rh-random]").forEach((el) => {
+          const key = el.getAttribute("data-rh-random");
+          rhRandom[key] = el.checked;
+          if (el.checked) delete rhParams[key];
+        });
+        entry.rhParams = rhParams;
+        entry.rhRandom = rhRandom;
+        const map = entry.openaiMapping || {};
+        entry.openaiMapping = {
+          prompt: map.prompt || [],
+          images: map.images || [],
+          size: map.size || undefined,
+          quality: map.quality || undefined,
+        };
+        return entry;
+      }
+
+      async function saveRhEditor() {
+        const errorEl = document.getElementById("rh-editor-error");
+        errorEl.textContent = "";
+        const entry = collectRhEditorDraft();
+        if (!entry || !rhEditor) return;
+        const kind = rhEditor.kind;
+        const list = kind === "app" ? [...rhState.rhApps] : [...rhState.rhWorkflows];
+        list[rhEditor.index] = entry;
+        try {
+          const res = await fetch("/dashboard/runninghub", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(
+              kind === "app" ? { rhApps: list } : { rhWorkflows: list }
+            ),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = data.error || "保存失败";
+            return;
+          }
+          applyRunningHubData(data.data || data);
+          const msgEl = document.getElementById("rh-config-msg");
+          msgEl.textContent = "节点参数已保存";
+          msgEl.style.display = "block";
+          closeRhEditor();
+        } catch (e) {
+          errorEl.textContent = "保存失败";
+        }
+      }
+
+      function previewRhEditorApi() {
+        const entry = collectRhEditorDraft();
+        if (!entry || !rhEditor) return;
+        const list = rhEditor.kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        const backup = list[rhEditor.index];
+        list[rhEditor.index] = entry;
+        showRhApiExample(rhEditor.kind, rhEditor.index);
+        list[rhEditor.index] = backup;
+      }
+
+      function switchRhApiTab(tab) {
+        rhApiExampleCache.active = tab;
+        document.querySelectorAll("#rh-api-modal .api-example-tabs button").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.apiTab === tab);
+        });
+        document.getElementById("rh-api-modal-code").textContent =
+          rhApiExampleCache[tab] || "";
+      }
+
+      function closeRhApiModal() {
+        document.getElementById("rh-api-modal").classList.remove("active");
+      }
+
+      async function copyRhApiExample() {
+        const text =
+          rhApiExampleCache[rhApiExampleCache.active] ||
+          document.getElementById("rh-api-modal-code").textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+          const msgEl = document.getElementById("rh-config-msg");
+          if (msgEl) {
+            msgEl.textContent = "API 示例已复制";
+            msgEl.style.display = "block";
+          }
+        } catch (e) {
+          alert("复制失败，请手动选择文本复制");
+        }
+      }
+
+      function applyRunningHubData(data) {
+        rhState = {
+          rhApps: Array.isArray(data.rhApps) ? data.rhApps : [],
+          rhWorkflows: Array.isArray(data.rhWorkflows) ? data.rhWorkflows : [],
+          defaultModel: data.defaultModel || "",
+        };
+        document.getElementById("rh-api-key").value = "";
+        document.getElementById("rh-wallet-key").value = "";
+        document.getElementById("rh-base-url").value =
+          data.baseUrl || "https://www.runninghub.cn";
+        document.getElementById("rh-key-preview").innerHTML = data.hasApiKey
+          ? `当前 Key：<code>${escapeHtml(data.apiKeyPreview)}</code>`
+          : "当前未配置";
+        document.getElementById("rh-wallet-preview").innerHTML = data.hasWalletApiKey
+          ? `当前 Key：<code>${escapeHtml(data.walletApiKeyPreview)}</code>`
+          : "当前未配置";
+        renderRunningHubLists();
+        fillDefaultModelSelect(data.models || [], data.defaultModel || "");
+      }
+
+      function fillDefaultModelSelect(models, selected) {
+        const select = document.getElementById("rh-default-model");
+        const options = ['<option value="">不设置（请求必须传 model）</option>'];
+        models.forEach((id) => {
+          options.push(
+            `<option value="${escapeHtml(id)}" ${
+              id === selected ? "selected" : ""
+            }>${escapeHtml(id)}</option>`
+          );
+        });
+        if (selected && !models.includes(selected)) {
+          options.push(
+            `<option value="${escapeHtml(selected)}" selected>${escapeHtml(
+              selected
+            )}（未启用）</option>`
+          );
+        }
+        select.innerHTML = options.join("");
+      }
+
+      function renderRunningHubLists() {
+        renderEntryList("rh-apps-list", "app", rhState.rhApps);
+        renderEntryList("rh-workflows-list", "workflow", rhState.rhWorkflows);
+        bindRhListActions();
+      }
+
+      function renderEntryList(containerId, kind, entries) {
+        const el = document.getElementById(containerId);
+        if (!entries.length) {
+          el.innerHTML = `<div class="rh-empty">暂无条目，请导入默认目录或粘贴链接添加</div>`;
+          return;
+        }
+        el.innerHTML = entries
+          .map((entry, index) => {
+            const modelId = rhModelId(kind, entry);
+            const enabled = entry.enabled !== false;
+            const analysis = entry.analysis;
+            let analysisHtml = `<div class="analysis warn">尚未分析，<a href="javascript:void(0)" data-rh-action="analyze" data-rh-kind="${kind}" data-rh-index="${index}">点击重新分析</a>拉取字段</div>`;
+            if (analysis) {
+              analysisHtml = `<div class="analysis ok">已分析：字段 ${analysis.fieldCount || 0} · 图 ${analysis.imageCount || 0} · 提示词 ${analysis.promptCount || 0} · 必填 ${analysis.requiredCount || 0} · <a href="javascript:void(0)" data-rh-action="api" data-rh-kind="${kind}" data-rh-index="${index}">查看 API</a></div>`;
+            }
+            return `
+              <div class="rh-entry" data-rh-kind="${kind}" data-rh-index="${index}">
+                <div class="meta">
+                  <div class="title">${escapeHtml(entry.title || modelId)}</div>
+                  <div class="id">${escapeHtml(modelId)}</div>
+                  ${analysisHtml}
+                </div>
+                <div class="actions">
+                  <label class="toggle">
+                    <input type="checkbox" data-rh-action="toggle" data-rh-kind="${kind}" data-rh-index="${index}" ${enabled ? "checked" : ""} />
+                    启用
+                  </label>
+                  <label class="toggle" title="开启后返回的图片由服务端解码为 data URL 返回">
+                    <input type="checkbox" data-rh-action="decode" data-rh-kind="${kind}" data-rh-index="${index}" ${entry.decode ? "checked" : ""} />
+                    解码
+                  </label>
+                  ${
+                    analysis
+                      ? `<button type="button" class="btn btn-secondary" style="width:auto;padding:6px 10px;font-size:12px" data-rh-action="edit" data-rh-kind="${kind}" data-rh-index="${index}">编辑节点</button>
+                      <button type="button" class="btn btn-secondary" style="width:auto;padding:6px 10px;font-size:12px" data-rh-action="api" data-rh-kind="${kind}" data-rh-index="${index}">查看 API</button>`
+                      : ""
+                  }
+                  <button type="button" class="btn btn-secondary" style="width:auto;padding:6px 10px;font-size:12px" data-rh-action="analyze" data-rh-kind="${kind}" data-rh-index="${index}">重新分析</button>
+                  <button type="button" class="btn btn-danger" style="width:auto;padding:6px 10px;font-size:12px" data-rh-action="remove" data-rh-kind="${kind}" data-rh-index="${index}">删除</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function bindRhListActions() {
+        ["rh-apps-list", "rh-workflows-list"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (!el || el.dataset.rhBound === "1") return;
+          el.dataset.rhBound = "1";
+          el.addEventListener("click", (event) => {
+            const target = event.target.closest("[data-rh-action]");
+            if (!target || !el.contains(target)) return;
+            const action = target.getAttribute("data-rh-action");
+            const kind = target.getAttribute("data-rh-kind");
+            const index = Number(target.getAttribute("data-rh-index"));
+            if (!kind || Number.isNaN(index)) return;
+            if (action === "analyze") {
+              event.preventDefault();
+              void analyzeRhEntry(kind, index);
+            } else if (action === "edit") {
+              event.preventDefault();
+              openRhEditor(kind, index);
+            } else if (action === "api") {
+              event.preventDefault();
+              showRhApiExample(kind, index);
+            } else if (action === "remove") {
+              event.preventDefault();
+              removeRhEntry(kind, index);
+            }
+          });
+          el.addEventListener("change", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            const action = target.getAttribute("data-rh-action");
+            if (action !== "toggle" && action !== "decode") return;
+            const kind = target.getAttribute("data-rh-kind");
+            const index = Number(target.getAttribute("data-rh-index"));
+            if (!kind || Number.isNaN(index)) return;
+            if (action === "toggle") toggleRhEntry(kind, index, target.checked);
+            else setRhEntryDecode(kind, index, target.checked);
+          });
+        });
+      }
+
+      function toggleRhEntry(kind, index, checked) {
+        const list = kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        if (!list[index]) return;
+        list[index] = { ...list[index], enabled: checked };
+        persistRhEntries();
+      }
+
+      function setRhEntryDecode(kind, index, checked) {
+        const list = kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        if (!list[index]) return;
+        list[index] = { ...list[index], decode: checked };
+        persistRhEntries();
+      }
+
+      function removeRhEntry(kind, index) {
+        if (kind === "app") rhState.rhApps.splice(index, 1);
+        else rhState.rhWorkflows.splice(index, 1);
+        persistRhEntries();
+      }
+
+      async function persistRhEntries() {
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        try {
+          const res = await fetch("/dashboard/runninghub", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              rhApps: rhState.rhApps,
+              rhWorkflows: rhState.rhWorkflows,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = data.error || "更新失败";
+            return;
+          }
+          applyRunningHubData(data.data || data);
+        } catch (e) {
+          errorEl.textContent = "更新失败";
+        }
+      }
+
+      async function loadRunningHubConfig() {
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        try {
+          const res = await fetch("/dashboard/runninghub", {
+            credentials: "include",
+          });
+          if (!res.ok) {
+            errorEl.textContent = "加载失败，请重新登录";
+            return;
+          }
+          applyRunningHubData(await res.json());
+        } catch (e) {
+          errorEl.textContent = "加载失败";
+        }
+      }
+
+      // —— 接口测试 ——
+      const TEST_LS = "imgtest:v1";
+      let testEndpoint = "generations";
+      let testInited = false;
+
+      function loadTestLS() {
+        try {
+          return JSON.parse(localStorage.getItem(TEST_LS) || "{}") || {};
+        } catch {
+          return {};
+        }
+      }
+      function saveTestLS(patch) {
+        try {
+          localStorage.setItem(TEST_LS, JSON.stringify({ ...loadTestLS(), ...patch }));
+        } catch {}
+      }
+
+      async function loadTestTab() {
+        if (!rhState.rhApps.length && !rhState.rhWorkflows.length) {
+          await loadRunningHubConfig();
+        }
+        populateTestModels();
+        if (testInited) return;
+        testInited = true;
+        const saved = loadTestLS();
+        if (saved.apiKey) document.getElementById("test-api-key").value = saved.apiKey;
+        if (saved.prompt) document.getElementById("test-prompt").value = saved.prompt;
+        document.querySelectorAll("#test-endpoint button").forEach((b) => {
+          b.addEventListener("click", () => setTestEndpoint(b.dataset.ep));
+        });
+        document.getElementById("test-images").addEventListener("change", renderTestFiles);
+        setTestEndpoint(testEndpoint);
+      }
+
+      function populateTestModels() {
+        const select = document.getElementById("test-model");
+        if (!select) return;
+        const prev = select.value;
+        const opts = [];
+        const push = (kind, list) => {
+          list
+            .filter((e) => e.enabled !== false)
+            .forEach((e) => {
+              const id = rhModelId(kind, e);
+              opts.push(
+                `<option value="${escapeHtml(id)}">${escapeHtml(
+                  (e.title || id) + " · " + id
+                )}</option>`
+              );
+            });
+        };
+        push("app", rhState.rhApps);
+        push("workflow", rhState.rhWorkflows);
+        if (!opts.length) {
+          select.innerHTML = `<option value="">（无已启用的 RH 模型，可在下方手填 model）</option>`;
+        } else {
+          select.innerHTML = opts.join("");
+          const saved = loadTestLS().model;
+          const want = prev || saved || rhState.defaultModel;
+          if (want && [...select.options].some((o) => o.value === want)) {
+            select.value = want;
+          }
+        }
+      }
+
+      function setTestEndpoint(ep) {
+        testEndpoint = ep;
+        document.querySelectorAll("#test-endpoint button").forEach((b) => {
+          b.classList.toggle("active", b.dataset.ep === ep);
+        });
+        document.getElementById("test-images-label").textContent =
+          ep === "edits"
+            ? "参考图 image（edits 必填，可多选）"
+            : "参考图 image（可选参考，可多选）";
+      }
+
+      function renderTestFiles() {
+        const wrap = document.getElementById("test-files");
+        const files = document.getElementById("test-images").files;
+        wrap.innerHTML = "";
+        [...files].forEach((f) => {
+          const url = URL.createObjectURL(f);
+          const div = document.createElement("div");
+          div.className = "test-thumb";
+          div.innerHTML = `<img src="${url}" alt="${escapeHtml(f.name)}" />`;
+          wrap.appendChild(div);
+        });
+      }
+
+      async function runImageTest() {
+        const statusEl = document.getElementById("test-status");
+        const resultEl = document.getElementById("test-result");
+        const btn = document.getElementById("test-send");
+        const model =
+          document.getElementById("test-model-custom").value.trim() ||
+          document.getElementById("test-model").value.trim();
+        const prompt = document.getElementById("test-prompt").value.trim();
+        const apiKey = document.getElementById("test-api-key").value.trim();
+        const n = parseInt(document.getElementById("test-n").value, 10) || 1;
+        const size = document.getElementById("test-size").value;
+        const quality = document.getElementById("test-quality").value;
+        const responseFormat =
+          document.getElementById("test-response-format").value || "url";
+        const files = document.getElementById("test-images").files;
+
+        if (!model) {
+          statusEl.className = "test-status err";
+          statusEl.textContent = "请选择或填写 model";
+          return;
+        }
+        if (!prompt) {
+          statusEl.className = "test-status err";
+          statusEl.textContent = "请填写 prompt";
+          return;
+        }
+        if (testEndpoint === "edits" && !files.length) {
+          statusEl.className = "test-status err";
+          statusEl.textContent = "edits 接口需要至少一张参考图";
+          return;
+        }
+
+        saveTestLS({ apiKey, prompt, model });
+
+        const headers = {};
+        if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
+        let bodyInit;
+        if (files.length) {
+          const fd = new FormData();
+          fd.append("model", model);
+          fd.append("prompt", prompt);
+          fd.append("n", String(n));
+          if (size) fd.append("size", size);
+          if (quality) fd.append("quality", quality);
+          fd.append("response_format", responseFormat);
+          [...files].forEach((f) => fd.append("image", f));
+          bodyInit = fd;
+        } else {
+          headers["Content-Type"] = "application/json";
+          const body = { model, prompt, n, response_format: responseFormat };
+          if (size) body.size = size;
+          if (quality) body.quality = quality;
+          bodyInit = JSON.stringify(body);
+        }
+
+        btn.disabled = true;
+        statusEl.className = "test-status pending";
+        statusEl.textContent = "请求中，RunningHub 生图通常需要数十秒，请耐心等待…";
+        resultEl.innerHTML = `<div class="test-placeholder">生成中…</div>`;
+        const started = Date.now();
+        try {
+          const res = await fetch("/v1/images/" + testEndpoint, {
+            method: "POST",
+            headers,
+            body: bodyInit,
+          });
+          const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+          const text = await res.text();
+          let json;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            json = null;
+          }
+          if (!res.ok || !json) {
+            statusEl.className = "test-status err";
+            statusEl.textContent = `失败（HTTP ${res.status}，用时 ${elapsed}s）`;
+            resultEl.innerHTML = `<pre class="api-example-pre">${escapeHtml(
+              text || "(空响应)"
+            )}</pre>`;
+            return;
+          }
+          const items = Array.isArray(json.data) ? json.data : [];
+          const urls = items
+            .map((it) =>
+              it.url ? it.url : it.b64_json ? "data:image/png;base64," + it.b64_json : ""
+            )
+            .filter(Boolean);
+          const decodedCount = urls.filter((u) => u.startsWith("data:")).length;
+          statusEl.className = "test-status ok";
+          statusEl.textContent = `成功，返回 ${urls.length} 张图片（已解码 data URL ${decodedCount} / 远程 URL ${
+            urls.length - decodedCount
+          }），用时 ${elapsed}s`;
+          const grid = urls.length
+            ? `<div class="test-result-grid">${urls
+                .map((u, i) => {
+                  const decoded = u.startsWith("data:");
+                  return `<div class="test-result-item">
+                      <span class="test-tag ${decoded ? "ok" : ""}">${
+                    decoded ? "已解码" : "远程"
+                  }</span>
+                      <a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(
+                    u
+                  )}" loading="lazy" /></a>
+                      <button type="button" class="test-dl" data-test-dl="${i}">下载</button>
+                    </div>`;
+                })
+                .join("")}</div>`
+            : `<div class="test-placeholder">响应里没有图片数据</div>`;
+          resultEl.innerHTML =
+            grid +
+            `<div class="test-raw-title">原始响应</div><pre class="api-example-pre">${escapeHtml(
+              JSON.stringify(json, null, 2)
+            )}</pre>`;
+          resultEl.querySelectorAll("[data-test-dl]").forEach((el) => {
+            el.addEventListener("click", () => {
+              const i = Number(el.getAttribute("data-test-dl"));
+              downloadTestImage(urls[i], `image-${i + 1}.png`);
+            });
+          });
+        } catch (e) {
+          statusEl.className = "test-status err";
+          statusEl.textContent = "请求出错：" + (e && e.message ? e.message : e);
+          resultEl.innerHTML = `<div class="test-placeholder">网络错误或服务未响应</div>`;
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      // 把返回图片解码为 blob 再下载：b64_json / data: 直接解码，远程 url 先 fetch，
+      // 失败（如跨域/防盗链）则回退新窗口打开
+      async function downloadTestImage(src, name) {
+        if (!src) return;
+        let objectUrl = "";
+        try {
+          const resp = await fetch(src);
+          const blob = await resp.blob();
+          objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (e) {
+          window.open(src, "_blank", "noopener");
+        } finally {
+          if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+        }
+      }
+
+      async function saveRunningHubConfig() {
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        const apiKey = document.getElementById("rh-api-key").value;
+        const walletApiKey = document.getElementById("rh-wallet-key").value;
+        const baseUrl = document.getElementById("rh-base-url").value;
+        const defaultModel = document.getElementById("rh-default-model").value;
+        try {
+          const res = await fetch("/dashboard/runninghub", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              apiKey,
+              walletApiKey,
+              baseUrl,
+              defaultModel,
+              rhApps: rhState.rhApps,
+              rhWorkflows: rhState.rhWorkflows,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = data.error || "保存失败";
+            return;
+          }
+          msgEl.textContent = data.message || "已保存";
+          msgEl.style.display = "block";
+          applyRunningHubData(data.data || data);
+        } catch (e) {
+          errorEl.textContent = "保存失败";
+        }
+      }
+
+      async function clearRunningHubApiKey() {
+        if (!confirm("确定清除已保存的 RunningHub RH 币 API Key？")) return;
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        try {
+          const res = await fetch("/dashboard/runninghub", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ clearApiKey: true }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = data.error || "清除失败";
+            return;
+          }
+          msgEl.textContent = "RH 币 API Key 已清除";
+          msgEl.style.display = "block";
+          applyRunningHubData(data.data || data);
+        } catch (e) {
+          errorEl.textContent = "清除失败";
+        }
+      }
+
+      async function clearRunningHubWalletKey() {
+        if (!confirm("确定清除已保存的 RunningHub 余额 API Key？")) return;
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        try {
+          const res = await fetch("/dashboard/runninghub", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ clearWalletApiKey: true }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = data.error || "清除失败";
+            return;
+          }
+          msgEl.textContent = "余额 API Key 已清除";
+          msgEl.style.display = "block";
+          applyRunningHubData(data.data || data);
+        } catch (e) {
+          errorEl.textContent = "清除失败";
+        }
+      }
+
+      async function importRunningHubCatalog() {
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        try {
+          const res = await fetch("/dashboard/runninghub/import-catalog", {
+            method: "POST",
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = data.error || "导入失败";
+            return;
+          }
+          msgEl.textContent = data.message || "已导入";
+          msgEl.style.display = "block";
+          applyRunningHubData(data.data || data);
+        } catch (e) {
+          errorEl.textContent = "导入失败";
+        }
+      }
+
+      async function addRunningHubLink() {
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        const input = document.getElementById("rh-link-input");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        msgEl.textContent = "正在拉取并分析字段…";
+        msgEl.style.display = "block";
+        try {
+          const res = await fetch("/dashboard/runninghub/add-link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ url: input.value }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            msgEl.style.display = "none";
+            errorEl.textContent = data.error || "添加失败";
+            return;
+          }
+          msgEl.textContent = data.message || "已添加并分析";
+          msgEl.style.display = "block";
+          input.value = "";
+          applyRunningHubData(data.data || data);
+          openRhApiExampleById(data.kind, data.entryId);
+        } catch (e) {
+          msgEl.style.display = "none";
+          errorEl.textContent = "添加失败";
+        }
+      }
+
+      async function analyzeRhEntry(kind, indexOrId) {
+        const list = kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
+        let entry = null;
+        let id = "";
+        if (typeof indexOrId === "number") {
+          entry = list[indexOrId];
+          id = entry ? entry.appId || entry.workflowId || entry.id : "";
+        } else {
+          id = String(indexOrId || "").trim();
+          entry = list.find(
+            (item) =>
+              item.id === id || item.appId === id || item.workflowId === id
+          );
+        }
+        if (!id) {
+          alert("无法识别要分析的条目");
+          return;
+        }
+
+        const msgEl = document.getElementById("rh-config-msg");
+        const errorEl = document.getElementById("rh-config-error");
+        msgEl.style.display = "none";
+        errorEl.textContent = "";
+        msgEl.textContent = `正在重新分析 ${kind}:${id} …`;
+        msgEl.style.display = "block";
+
+        document.querySelectorAll('[data-rh-action="analyze"]').forEach((btn) => {
+          btn.disabled = true;
+        });
+
+        try {
+          const res = await fetch("/dashboard/runninghub/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ kind, id }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            msgEl.style.display = "none";
+            errorEl.textContent = data.error || data.msg || "分析失败";
+            return;
+          }
+          msgEl.textContent = data.message || "重新分析完成";
+          msgEl.style.display = "block";
+          applyRunningHubData(data.data || data);
+          // 重新分析只更新结果，不自动弹 API；需要时点「查看 API」
+        } catch (e) {
+          msgEl.style.display = "none";
+          errorEl.textContent = "分析失败：" + (e && e.message ? e.message : "网络错误");
+        } finally {
+          document.querySelectorAll('[data-rh-action="analyze"]').forEach((btn) => {
+            btn.disabled = false;
+          });
+        }
+      }
 
       // Stats
       async function loadStats() {

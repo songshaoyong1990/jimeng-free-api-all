@@ -2,6 +2,12 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
+import {
+  normalizeRunningHubEntries,
+  runningHubModelOptions,
+  type RunningHubEntry,
+  type RunningHubStoredConfig,
+} from './runninghub-config.ts';
 
 // 数据库文件路径
 const DB_PATH = process.env.DB_PATH || './data/jimeng.db';
@@ -64,12 +70,54 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
 
+  -- 通用配置表（RunningHub 等）
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
   -- 创建索引
   CREATE INDEX IF NOT EXISTS idx_key_stats_key ON key_stats(key_hash);
   CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
   CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at DESC);
 `);
+
+const RH_SETTING_KEYS = {
+  apiKey: 'runninghub.apiKey',
+  walletApiKey: 'runninghub.walletApiKey',
+  baseUrl: 'runninghub.baseUrl',
+  defaultModel: 'runninghub.defaultModel',
+  rhApps: 'runninghub.rhApps',
+  rhWorkflows: 'runninghub.rhWorkflows',
+} as const;
+
+export type RunningHubConfig = RunningHubStoredConfig;
+
+export type RunningHubConfigPublic = {
+  apiKeyPreview: string;
+  hasApiKey: boolean;
+  walletApiKeyPreview: string;
+  hasWalletApiKey: boolean;
+  baseUrl: string;
+  defaultModel: string;
+  rhApps: RunningHubEntry[];
+  rhWorkflows: RunningHubEntry[];
+  models: string[];
+};
+
+function getSetting(key: string): string {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return row?.value || '';
+}
+
+function setSetting(key: string, value: string): void {
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(key, value);
+}
 
 // 密码哈希
 export function hashPassword(password: string): string {
@@ -248,6 +296,80 @@ export function clearLogs(): void {
   db.prepare('DELETE FROM logs').run();
 }
 
+// ==================== RunningHub 配置 ====================
+
+function parseJsonSetting<T>(key: string, fallback: T): T {
+  const raw = getSetting(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function getRunningHubConfig(): RunningHubConfig {
+  return {
+    apiKey: getSetting(RH_SETTING_KEYS.apiKey),
+    walletApiKey: getSetting(RH_SETTING_KEYS.walletApiKey),
+    baseUrl: getSetting(RH_SETTING_KEYS.baseUrl) || 'https://www.runninghub.cn',
+    defaultModel: getSetting(RH_SETTING_KEYS.defaultModel),
+    rhApps: normalizeRunningHubEntries(parseJsonSetting<any[]>(RH_SETTING_KEYS.rhApps, []), 'app'),
+    rhWorkflows: normalizeRunningHubEntries(parseJsonSetting<any[]>(RH_SETTING_KEYS.rhWorkflows, []), 'workflow'),
+  };
+}
+
+export function getRunningHubConfigPublic(): RunningHubConfigPublic {
+  const config = getRunningHubConfig();
+  return {
+    apiKeyPreview: config.apiKey ? keyPreview(config.apiKey) : '',
+    hasApiKey: Boolean(config.apiKey),
+    walletApiKeyPreview: config.walletApiKey ? keyPreview(config.walletApiKey) : '',
+    hasWalletApiKey: Boolean(config.walletApiKey),
+    baseUrl: config.baseUrl,
+    defaultModel: config.defaultModel,
+    rhApps: config.rhApps,
+    rhWorkflows: config.rhWorkflows,
+    models: runningHubModelOptions(config),
+  };
+}
+
+export function saveRunningHubConfig(input: {
+  apiKey?: string;
+  walletApiKey?: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  rhApps?: RunningHubEntry[];
+  rhWorkflows?: RunningHubEntry[];
+  clearApiKey?: boolean;
+  clearWalletApiKey?: boolean;
+}): RunningHubConfigPublic {
+  if (input.clearApiKey) {
+    setSetting(RH_SETTING_KEYS.apiKey, '');
+  } else if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
+    setSetting(RH_SETTING_KEYS.apiKey, input.apiKey.trim());
+  }
+  if (input.clearWalletApiKey) {
+    setSetting(RH_SETTING_KEYS.walletApiKey, '');
+  } else if (typeof input.walletApiKey === 'string' && input.walletApiKey.trim()) {
+    setSetting(RH_SETTING_KEYS.walletApiKey, input.walletApiKey.trim());
+  }
+  if (typeof input.baseUrl === 'string') {
+    const baseUrl = input.baseUrl.trim().replace(/\/+$/, '') || 'https://www.runninghub.cn';
+    setSetting(RH_SETTING_KEYS.baseUrl, baseUrl);
+  }
+  if (typeof input.defaultModel === 'string') {
+    setSetting(RH_SETTING_KEYS.defaultModel, input.defaultModel.trim());
+  }
+  if (Array.isArray(input.rhApps)) {
+    setSetting(RH_SETTING_KEYS.rhApps, JSON.stringify(normalizeRunningHubEntries(input.rhApps, 'app')));
+  }
+  if (Array.isArray(input.rhWorkflows)) {
+    setSetting(RH_SETTING_KEYS.rhWorkflows, JSON.stringify(normalizeRunningHubEntries(input.rhWorkflows, 'workflow')));
+  }
+  return getRunningHubConfigPublic();
+}
+
 export default {
   isSetupComplete,
   createUser,
@@ -262,5 +384,8 @@ export default {
   getMedia,
   addLog,
   getLogs,
-  clearLogs
+  clearLogs,
+  getRunningHubConfig,
+  getRunningHubConfigPublic,
+  saveRunningHubConfig,
 };

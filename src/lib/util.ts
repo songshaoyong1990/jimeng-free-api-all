@@ -297,10 +297,23 @@ const util = {
   },
 
   async fetchFileBASE64(url: string) {
+    const buffer = await this.fetchFileBuffer(url);
+    return buffer.toString("base64");
+  },
+
+  async fetchFileBuffer(url: string): Promise<Buffer> {
     const result = await axios.get(url, {
       responseType: "arraybuffer",
     });
-    return result.data.toString("base64");
+    return Buffer.from(result.data);
+  },
+
+  async fetchFileDataUrl(url: string) {
+    const result = await axios.get(url, {
+      responseType: "arraybuffer",
+    });
+    const contentType = result.headers["content-type"] || "image/png";
+    return `data:${contentType};base64,${Buffer.from(result.data).toString("base64")}`;
   },
 };
 
