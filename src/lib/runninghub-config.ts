@@ -34,6 +34,8 @@ export type RunningHubEntry = {
   rhParams?: Record<string, string>;
   /** 随机开关，key = nodeId::fieldName */
   rhRandom?: Record<string, boolean>;
+  /** IMAGE 字段：勾选后无参考图也提交 fieldValue:"" */
+  rhEmptyImage?: Record<string, boolean>;
   /** OpenAI 字段 → 节点字段映射 */
   openaiMapping?: RunningHubOpenAIMapping;
   instanceType?: string;
@@ -155,6 +157,7 @@ export function slimRunningHubEntry(entry: any, kind: "app" | "workflow"): Runni
     fields,
     rhParams: slimStringMap(entry?.rhParams),
     rhRandom: slimBoolMap(entry?.rhRandom),
+    rhEmptyImage: slimBoolMap(entry?.rhEmptyImage),
     openaiMapping: slimOpenAIMapping(entry?.openaiMapping),
     instanceType: entry?.instanceType != null ? String(entry.instanceType) : undefined,
     payment: entry?.payment != null ? String(entry.payment) : undefined,
@@ -187,7 +190,9 @@ export function mergeRunningHubEntries(current: RunningHubEntry[], incoming: Run
       fields: (entry.fields || []).length ? entry.fields : prev?.fields,
       rhParams: entry.rhParams || prev?.rhParams,
       rhRandom: entry.rhRandom || prev?.rhRandom,
-      openaiMapping: entry.openaiMapping || prev?.openaiMapping,
+      rhEmptyImage: entry.rhEmptyImage || prev?.rhEmptyImage,
+      openaiMapping:
+        entry.openaiMapping !== undefined ? entry.openaiMapping : prev?.openaiMapping,
       instanceType: entry.instanceType ?? prev?.instanceType,
       payment: entry.payment ?? prev?.payment,
       decode: entry.decode ?? prev?.decode,

@@ -1029,16 +1029,65 @@
         margin-top: 10px;
       }
       .test-thumb {
-        width: 64px;
-        height: 64px;
+        width: 72px;
+        height: 72px;
         border-radius: 8px;
         overflow: hidden;
         border: 1px solid var(--border);
+        position: relative;
+        background: var(--bg-secondary);
+      }
+      .test-thumb .slot-idx {
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        z-index: 1;
+        font-size: 10px;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.65);
+        color: #fff;
+      }
+      .test-thumb .test-thumb-del {
+        position: absolute;
+        right: 2px;
+        top: 2px;
+        z-index: 1;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        font-size: 12px;
+        line-height: 18px;
+        cursor: pointer;
+      }
+      .test-thumb .test-thumb-del:hover {
+        background: var(--error, #e5484d);
       }
       .test-thumb img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        display: block;
+      }
+      .test-images-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      .test-images-actions .rh-ed-linkbtn {
+        background: none;
+        border: none;
+        color: var(--accent);
+        cursor: pointer;
+        font-size: 13px;
+        padding: 0;
       }
       .test-status {
         font-size: 13px;
@@ -1462,10 +1511,14 @@
               </div>
             </div>
             <div class="form-group">
-              <label id="test-images-label"
-                >参考图 image（generations 可选参考；edits 必填，可多选）</label
-              >
-              <input type="file" id="test-images" accept="image/*" multiple />
+              <label id="test-images-label">参考图 image（可选参考，可多选）</label>
+              <input type="file" id="test-images" name="image" accept="image/*" multiple />
+              <div class="test-images-actions">
+                <button type="button" class="rh-ed-linkbtn" id="test-images-clear" hidden>清空全部</button>
+              </div>
+              <div class="hint" id="test-images-hint" style="margin-top: 6px">
+                可多次点选追加；缩略图右上角删除单张。顺序对应 images[0]、images[1]…
+              </div>
               <div class="test-files" id="test-files"></div>
             </div>
             <button class="btn" id="test-send" onclick="runImageTest()">
@@ -1789,7 +1842,35 @@
         return `${field.nodeId}::${field.fieldName}`;
       }
 
+      /** 自然序：lora_2 排在 lora_10 前；同名再按 nodeId */
+      function rhFieldSortKey(field) {
+        const label = String(field.label || field.fieldName || "");
+        const name = String(field.fieldName || "");
+        const node = String(field.nodeId || "");
+        return `${label}\0${name}\0${node}`;
+      }
+
+      function rhNaturalCompare(a, b) {
+        return rhFieldSortKey(a).localeCompare(rhFieldSortKey(b), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      }
+
+      function sortRhFields(list) {
+        const roleRank = (role) =>
+          role === "prompt" ? 0 : role === "image" ? 1 : role === "video" || role === "audio" ? 2 : 3;
+        return [...(list || [])].sort((a, b) => {
+          const rr = roleRank(a.role) - roleRank(b.role);
+          if (rr) return rr;
+          return rhNaturalCompare(a, b);
+        });
+      }
+
       function rhFieldLooksLikeSize(field) {
+        const name = String(field.fieldName || "").toLowerCase();
+        // batch_size 含 size 字样，但不是画面尺寸
+        if (/batch[_-]?size|steps|cfg|seed|denoise|strength/.test(name)) return false;
         const text = `${field.fieldName || ""} ${field.label || ""} ${field.role || ""}`.toLowerCase();
         return /size|aspect|ratio|width|height|分辨率|尺寸|比例|宽|高/.test(text);
       }
@@ -1813,14 +1894,24 @@
         const inferred = inferRhOpenAIMapping(fields);
         const valid = new Set((fields || []).map(rhFieldKey));
         const filterKeys = (keys) => (keys || []).filter((key) => valid.has(key));
-        const prompt = saved && saved.prompt != null ? filterKeys(saved.prompt) : inferred.prompt;
-        const images = saved && saved.images != null ? filterKeys(saved.images) : inferred.images;
-        let size = saved && saved.size != null ? String(saved.size) : inferred.size;
-        if (size && !valid.has(size)) size = inferred.size;
+        // images 槽位：空串保留占位（「不映射」/刚增加的槽），无效 key 清空但不断槽
+        const filterImageSlots = (keys) =>
+          (keys || []).map((key) => {
+            const k = String(key || "").trim();
+            if (!k) return "";
+            return valid.has(k) ? k : "";
+          });
+        // 已保存对象里出现过的键（含空串/空数组）视为显式「不映射」，不要回落推断
+        const hasSaved = saved && typeof saved === "object";
+        const prompt = hasSaved && "prompt" in saved ? filterKeys(saved.prompt) : inferred.prompt;
+        const images =
+          hasSaved && "images" in saved ? filterImageSlots(saved.images) : inferred.images;
+        let size = hasSaved && "size" in saved ? String(saved.size || "") : inferred.size;
+        if (size && !valid.has(size)) size = hasSaved && "size" in saved ? "" : inferred.size;
         let quality =
-          saved && saved.quality != null ? String(saved.quality) : inferred.quality;
+          hasSaved && "quality" in saved ? String(saved.quality || "") : inferred.quality;
         if (quality && quality !== OA_QUALITY_INSTANCE && !valid.has(quality)) {
-          quality = OA_QUALITY_INSTANCE;
+          quality = hasSaved && "quality" in saved ? "" : OA_QUALITY_INSTANCE;
         }
         return { prompt: prompt || [], images: images || [], size: size || "", quality: quality || "" };
       }
@@ -1856,8 +1947,16 @@
         };
         if (!rhEditor.entry.rhParams) rhEditor.entry.rhParams = {};
         if (!rhEditor.entry.rhRandom) rhEditor.entry.rhRandom = {};
+        if (!rhEditor.entry.rhEmptyImage) rhEditor.entry.rhEmptyImage = {};
         if (!rhEditor.entry.payment) rhEditor.entry.payment = "coin";
         if (rhEditor.entry.instanceType == null) rhEditor.entry.instanceType = "";
+        const rawMapping = rhEditor.entry.openaiMapping;
+        rhEditor.explicitMappingKeys = {
+          prompt: !!(rawMapping && "prompt" in rawMapping),
+          images: !!(rawMapping && "images" in rawMapping),
+          size: !!(rawMapping && "size" in rawMapping),
+          quality: !!(rawMapping && "quality" in rawMapping),
+        };
         rhEditor.entry.openaiMapping = resolveRhOpenAIMapping(
           rhEditor.entry.fields,
           rhEditor.entry.openaiMapping
@@ -1908,12 +2007,23 @@
         const sizeCandidates = fields.filter(
           (f) => f.enabled !== false && f.role !== "image" && f.role !== "video" && f.role !== "audio"
         );
-        const imageSlots = (mapping.images && mapping.images.length
-          ? mapping.images
-          : imageCandidates.map(rhFieldKey)
+        // 已显式保存过 images（含空数组=全部不映射）时，禁止回填候选字段
+        const explicitImages = !!(rhEditor.explicitMappingKeys && rhEditor.explicitMappingKeys.images);
+        const imageSlots = (
+          explicitImages
+            ? [...(mapping.images || [])]
+            : mapping.images && mapping.images.length
+              ? [...mapping.images]
+              : imageCandidates.map(rhFieldKey)
         ).slice(0, 7);
-        while (imageSlots.length < Math.min(2, imageCandidates.length)) {
-          imageSlots.push(imageCandidates[imageSlots.length] ? rhFieldKey(imageCandidates[imageSlots.length]) : "");
+        if (!explicitImages) {
+          while (imageSlots.length < Math.min(2, imageCandidates.length)) {
+            imageSlots.push(
+              imageCandidates[imageSlots.length]
+                ? rhFieldKey(imageCandidates[imageSlots.length])
+                : ""
+            );
+          }
         }
 
         const fieldSelectOptions = (list, selected, includeInstance) => {
@@ -1936,6 +2046,10 @@
           return opts.join("");
         };
 
+        const sortedPromptCandidates = sortRhFields(promptCandidates);
+        const sortedImageCandidates = sortRhFields(imageCandidates);
+        const sortedSizeCandidates = sortRhFields(sizeCandidates);
+
         // ── 左栏：OpenAI 请求映射 ──
         const mapHtml = `
           <div class="rh-ed-col">
@@ -1949,8 +2063,8 @@
                 <div class="hint">勾选接收提示词的字段（可多选）</div>
                 <div class="rh-editor-checks" id="rh-map-prompt">
                   ${
-                    promptCandidates.length
-                      ? promptCandidates
+                    sortedPromptCandidates.length
+                      ? sortedPromptCandidates
                           .map((f) => {
                             const key = rhFieldKey(f);
                             const checked = mapping.prompt.includes(key) ? "checked" : "";
@@ -1977,7 +2091,7 @@
                             return `<div class="rh-ed-slot">
                               <span class="slot-idx">images[${i}]</span>
                               <select data-oa-image-slot="${i}">${fieldSelectOptions(
-                              imageCandidates,
+                              sortedImageCandidates,
                               selected,
                               false
                             )}</select>
@@ -1993,14 +2107,14 @@
               <div class="rh-ed-map-item">
                 <span class="oa-tag">size</span>
                 <div class="hint">写入尺寸/比例类字段</div>
-                <select id="rh-map-size">${fieldSelectOptions(sizeCandidates, mapping.size, false)}</select>
+                <select id="rh-map-size">${fieldSelectOptions(sortedSizeCandidates, mapping.size, false)}</select>
               </div>
 
               <div class="rh-ed-map-item">
                 <span class="oa-tag">quality</span>
                 <div class="hint">映射到实例类型，或某个节点字段</div>
                 <select id="rh-map-quality">${fieldSelectOptions(
-                  sizeCandidates,
+                  sortedSizeCandidates,
                   mapping.quality,
                   true
                 )}</select>
@@ -2018,12 +2132,14 @@
           ...editable,
         ];
         const seen = new Set();
-        const displayFields = allShown.filter((f) => {
-          const key = rhFieldKey(f);
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
+        const displayFields = sortRhFields(
+          allShown.filter((f) => {
+            const key = rhFieldKey(f);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+        );
 
         let paramsBody = "";
         if (!displayFields.length) {
@@ -2044,11 +2160,20 @@
               const oaBadge = openaiBadgesForField(key, mapping);
               let control = "";
               if (field.role === "image" || field.role === "video" || field.role === "audio") {
-                control = `<div class="hint" style="color:var(--text-secondary);font-size:12px">由 OpenAI <code>images</code> 映射填充（见左栏）</div>`;
+                const emptyOn = !!(entry.rhEmptyImage && entry.rhEmptyImage[key]);
+                control =
+                  field.role === "image"
+                    ? `<div class="hint" style="color:var(--text-secondary);font-size:12px">由 OpenAI <code>images</code> 映射填充（见左栏）</div>
+                  <label class="toggle" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px">
+                    <input type="checkbox" data-rh-empty-image="${escapeHtml(key)}" ${
+                        emptyOn ? "checked" : ""
+                      }/> 无图时仍提交空值
+                  </label>`
+                    : `<div class="hint" style="color:var(--text-secondary);font-size:12px">媒体字段由请求映射填充</div>`;
               } else if (field.role === "prompt" && (mapping.prompt || []).includes(key)) {
                 control = `<input type="text" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(
                   value
-                )}" placeholder="可选默认提示词（请求带 prompt 时优先）" />`;
+                )}" placeholder="仅当请求未带 prompt 时使用的默认提示词" />`;
               } else if (field.role === "boolean") {
                 control = `<select data-rh-param="${escapeHtml(key)}">
                   <option value="true" ${String(value) === "true" ? "selected" : ""}>true</option>
@@ -2148,9 +2273,22 @@
         if (addBtn) {
           addBtn.addEventListener("click", () => {
             collectRhEditorMappingIntoEntry();
-            const cur = rhEditor.entry.openaiMapping.images || [];
-            cur.push("");
+            const cur = [...(rhEditor.entry.openaiMapping.images || [])];
+            if (cur.length >= 7) return;
+            const used = new Set(cur.filter(Boolean));
+            const nextField = (rhEditor.entry.fields || []).find((f) => {
+              if (f.enabled === false) return false;
+              const isImg =
+                f.role === "image" || /image|img|mask/i.test(String(f.fieldName || ""));
+              if (!isImg) return false;
+              const key = rhFieldKey(f);
+              return key && !used.has(key);
+            });
+            // 优先填入尚未映射的 IMAGE 字段；没有则留空槽供手动选
+            cur.push(nextField ? rhFieldKey(nextField) : "");
             rhEditor.entry.openaiMapping.images = cur;
+            if (!rhEditor.explicitMappingKeys) rhEditor.explicitMappingKeys = {};
+            rhEditor.explicitMappingKeys.images = true;
             renderRhEditorForm();
           });
         }
@@ -2158,6 +2296,12 @@
         if (resetBtn) {
           resetBtn.addEventListener("click", () => {
             rhEditor.entry.openaiMapping = inferRhOpenAIMapping(rhEditor.entry.fields);
+            rhEditor.explicitMappingKeys = {
+              prompt: true,
+              images: true,
+              size: true,
+              quality: true,
+            };
             renderRhEditorForm();
           });
         }
@@ -2169,6 +2313,7 @@
         document.querySelectorAll("#rh-editor-form [data-oa-prompt]:checked").forEach((el) => {
           if (el.value) prompt.push(el.value);
         });
+        // 保留空串槽位：否则「+ 增加 images 槽位」立刻被丢掉
         const images = [];
         document.querySelectorAll("#rh-editor-form [data-oa-image-slot]").forEach((el) => {
           images.push(el.value || "");
@@ -2177,12 +2322,16 @@
         const qualityEl = document.getElementById("rh-map-quality");
         rhEditor.entry.openaiMapping = {
           prompt,
-          images: images.filter((key, idx) => key || idx < images.length),
+          images,
           size: sizeEl ? sizeEl.value : "",
           quality: qualityEl ? qualityEl.value : "",
         };
-        // drop trailing empty image slots but keep intentional empties in middle? keep non-empty only for save
-        rhEditor.entry.openaiMapping.images = images.filter(Boolean);
+        rhEditor.explicitMappingKeys = {
+          prompt: true,
+          images: true,
+          size: true,
+          quality: true,
+        };
       }
 
       function collectRhEditorDraft() {
@@ -2193,6 +2342,7 @@
         collectRhEditorMappingIntoEntry();
         const rhParams = { ...(entry.rhParams || {}) };
         const rhRandom = { ...(entry.rhRandom || {}) };
+        const rhEmptyImage = {};
         document.querySelectorAll("#rh-editor-form [data-rh-param]").forEach((el) => {
           const key = el.getAttribute("data-rh-param");
           rhParams[key] = el.value;
@@ -2202,14 +2352,20 @@
           rhRandom[key] = el.checked;
           if (el.checked) delete rhParams[key];
         });
+        document.querySelectorAll("#rh-editor-form [data-rh-empty-image]").forEach((el) => {
+          const key = el.getAttribute("data-rh-empty-image");
+          if (el.checked) rhEmptyImage[key] = true;
+        });
         entry.rhParams = rhParams;
         entry.rhRandom = rhRandom;
+        entry.rhEmptyImage = rhEmptyImage;
+        // 保留空串/空数组：表示用户显式选择「不映射」，不能写成 undefined 否则会被重新推断
         const map = entry.openaiMapping || {};
         entry.openaiMapping = {
-          prompt: map.prompt || [],
-          images: map.images || [],
-          size: map.size || undefined,
-          quality: map.quality || undefined,
+          prompt: Array.isArray(map.prompt) ? map.prompt : [],
+          images: Array.isArray(map.images) ? map.images : [],
+          size: map.size != null ? String(map.size) : "",
+          quality: map.quality != null ? String(map.quality) : "",
         };
         return entry;
       }
@@ -2486,6 +2642,8 @@
       const TEST_LS = "imgtest:v1";
       let testEndpoint = "generations";
       let testInited = false;
+      /** @type {{ file: File, url: string }[]} */
+      let testImageItems = [];
 
       function loadTestLS() {
         try {
@@ -2513,8 +2671,11 @@
         document.querySelectorAll("#test-endpoint button").forEach((b) => {
           b.addEventListener("click", () => setTestEndpoint(b.dataset.ep));
         });
-        document.getElementById("test-images").addEventListener("change", renderTestFiles);
+        document.getElementById("test-images").addEventListener("change", onTestImagesPicked);
+        const clearBtn = document.getElementById("test-images-clear");
+        if (clearBtn) clearBtn.addEventListener("click", clearTestImages);
         setTestEndpoint(testEndpoint);
+        renderTestFiles();
       }
 
       function populateTestModels() {
@@ -2555,21 +2716,63 @@
         });
         document.getElementById("test-images-label").textContent =
           ep === "edits"
-            ? "参考图 image（edits 必填，可多选）"
-            : "参考图 image（可选参考，可多选）";
+            ? "参考图 image（必填，可多次添加）"
+            : "参考图 image（可选参考，可多次添加）";
+      }
+
+      function onTestImagesPicked(e) {
+        const input = e.target;
+        const picked = [...(input.files || [])];
+        // 清空 input，便于再次选择同一文件追加
+        input.value = "";
+        if (!picked.length) return;
+        for (const file of picked) {
+          if (testImageItems.length >= 7) break;
+          testImageItems.push({ file, url: URL.createObjectURL(file) });
+        }
+        renderTestFiles();
+      }
+
+      function removeTestImage(index) {
+        const item = testImageItems[index];
+        if (!item) return;
+        if (item.url) URL.revokeObjectURL(item.url);
+        testImageItems.splice(index, 1);
+        renderTestFiles();
+      }
+
+      function clearTestImages() {
+        testImageItems.forEach((item) => {
+          if (item.url) URL.revokeObjectURL(item.url);
+        });
+        testImageItems = [];
+        const input = document.getElementById("test-images");
+        if (input) input.value = "";
+        renderTestFiles();
       }
 
       function renderTestFiles() {
         const wrap = document.getElementById("test-files");
-        const files = document.getElementById("test-images").files;
+        const hint = document.getElementById("test-images-hint");
+        const clearBtn = document.getElementById("test-images-clear");
+        if (!wrap) return;
         wrap.innerHTML = "";
-        [...files].forEach((f) => {
-          const url = URL.createObjectURL(f);
+        testImageItems.forEach((item, i) => {
           const div = document.createElement("div");
           div.className = "test-thumb";
-          div.innerHTML = `<img src="${url}" alt="${escapeHtml(f.name)}" />`;
+          div.title = `images[${i}] · ${item.file.name}`;
+          div.innerHTML = `<span class="slot-idx">[${i}]</span><button type="button" class="test-thumb-del" data-del="${i}" title="删除">×</button><img src="${item.url}" alt="${escapeHtml(item.file.name)}" />`;
           wrap.appendChild(div);
         });
+        wrap.querySelectorAll("[data-del]").forEach((btn) => {
+          btn.addEventListener("click", () => removeTestImage(Number(btn.getAttribute("data-del"))));
+        });
+        if (clearBtn) clearBtn.hidden = testImageItems.length === 0;
+        if (hint) {
+          hint.textContent = testImageItems.length
+            ? `已选 ${testImageItems.length} 张（可继续点上方选择追加），顺序 images[0]…images[${testImageItems.length - 1}]`
+            : "可多次点选追加；缩略图右上角删除单张。顺序对应 images[0]、images[1]…";
+        }
       }
 
       async function runImageTest() {
@@ -2586,7 +2789,7 @@
         const quality = document.getElementById("test-quality").value;
         const responseFormat =
           document.getElementById("test-response-format").value || "url";
-        const files = document.getElementById("test-images").files;
+        const files = testImageItems.map((item) => item.file);
 
         if (!model) {
           statusEl.className = "test-status err";
@@ -2617,6 +2820,7 @@
           if (size) fd.append("size", size);
           if (quality) fd.append("quality", quality);
           fd.append("response_format", responseFormat);
+          // 每张图都用 image 字段提交；后端 formidable multiples 会收成数组
           [...files].forEach((f) => fd.append("image", f));
           bodyInit = fd;
         } else {

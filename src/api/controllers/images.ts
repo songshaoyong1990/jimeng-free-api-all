@@ -478,7 +478,7 @@ export async function generateImages(
     failCode,
     item_list = [];
   let retryCount = 0;
-  const MAX_POLL_RETRIES = 120; // 最多轮询120次
+  const MAX_POLL_RETRIES = 180; // 最多轮询180次（约180秒）
 
   while (
     PROCESSING_STATES.includes(status) &&

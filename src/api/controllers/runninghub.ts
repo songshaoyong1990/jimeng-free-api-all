@@ -50,6 +50,8 @@ export type GenerateRunningHubOptions = {
   rhParams?: Record<string, string>;
   /** key = nodeId::fieldName，为 true 时对该 random 字段强制随机 */
   rhRandom?: Record<string, boolean>;
+  /** key = nodeId::fieldName，为 true 时无图也提交 fieldValue:"" */
+  rhEmptyImage?: Record<string, boolean>;
   /** OpenAI → 节点字段映射 */
   openaiMapping?: RunningHubOpenAIMapping;
 };
@@ -253,6 +255,7 @@ function buildRunningHubNodeInfoList(options: {
   uploadedImages: string[];
   rhParams?: Record<string, string>;
   rhRandom?: Record<string, boolean>;
+  rhEmptyImage?: Record<string, boolean>;
   openaiMapping?: RunningHubOpenAIMapping;
 }) {
   const fields = (options.fields || []).filter((field) => field.enabled !== false);
@@ -278,6 +281,7 @@ function buildRunningHubNodeInfoList(options: {
   const promptText = options.prompt.trim();
   const rhParams = options.rhParams || {};
   const rhRandom = options.rhRandom || {};
+  const rhEmptyImage = options.rhEmptyImage || {};
 
   for (const field of fields) {
     const nodeId = String(field.nodeId || "").trim();
@@ -291,25 +295,27 @@ function buildRunningHubNodeInfoList(options: {
     const override = hasOverride ? String(rhParams[key] ?? "").trim() : "";
 
     if (kind === "image") {
-      let value = hasOverride ? override : "";
-      if (!value) {
-        if (useImageMap) {
-          const mappedIndex = imageIndexByKey.get(key);
-          if (mappedIndex != null) value = options.uploadedImages[mappedIndex] || "";
-        } else {
-          const index = imageCursor.get("__seq__") || 0;
-          imageCursor.set("__seq__", index + 1);
-          value = options.uploadedImages[index] || "";
-        }
+      // 默认：有图才提交；勾选 rhEmptyImage 后无图也传 fieldValue:""
+      let value = "";
+      if (hasOverride) {
+        value = override;
+      } else if (useImageMap) {
+        const mappedIndex = imageIndexByKey.get(key);
+        if (mappedIndex != null) value = options.uploadedImages[mappedIndex] || "";
+        else if (rhEmptyImage[key] !== true) continue; // 未映射且未勾选空提交：跳过
+      } else {
+        const index = imageCursor.get("__seq__") || 0;
+        imageCursor.set("__seq__", index + 1);
+        value = options.uploadedImages[index] || "";
       }
-      if (!value) {
-        if (!hasOverride && field.required) {
-          const fallback = rhDefaultValue(field);
-          if (fallback) nodeInfoList.push({ nodeId, fieldName, fieldValue: fallback });
-        }
-        continue;
+      if (value) {
+        nodeInfoList.push({ nodeId, fieldName, fieldValue: value });
+      } else if (rhEmptyImage[key] === true) {
+        nodeInfoList.push({ nodeId, fieldName, fieldValue: "" });
+        logger.info(`[RunningHub] image→${key} 无图，勾选空提交 → fieldValue=""`);
+      } else {
+        logger.info(`[RunningHub] image→${key} 无图，跳过该节点`);
       }
-      nodeInfoList.push({ nodeId, fieldName, fieldValue: value });
       continue;
     }
 
@@ -323,8 +329,16 @@ function buildRunningHubNodeInfoList(options: {
 
     const isPromptTarget = usePromptMap ? promptKeys.has(key) : role === "prompt";
     if (isPromptTarget) {
-      const value = hasOverride ? override || promptText : override || promptText || rhDefaultValue(field);
-      nodeInfoList.push({ nodeId, fieldName, fieldValue: value });
+      // 请求 prompt 优先；rh_params / 字段默认值仅在请求为空时兜底
+      const value = promptText || (hasOverride ? override : "") || rhDefaultValue(field) || "";
+      if (value) {
+        nodeInfoList.push({ nodeId, fieldName, fieldValue: value });
+        logger.info(
+          `[RunningHub] prompt→${key} via=${promptText ? "request" : hasOverride && override ? "rh_params" : "field-default"} len=${value.length}`
+        );
+      } else {
+        logger.warn(`[RunningHub] prompt→${key} 为空，已跳过`);
+      }
       continue;
     }
 
@@ -802,6 +816,7 @@ async function generateRunningHubImagesOnce(
       uploadedImages,
       rhParams: options.rhParams,
       rhRandom: options.rhRandom,
+      rhEmptyImage: options.rhEmptyImage,
       openaiMapping: options.openaiMapping,
     });
     if (options.openaiMapping) {

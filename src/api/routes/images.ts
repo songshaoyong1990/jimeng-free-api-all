@@ -203,6 +203,7 @@ async function handleRunningHubImages(request: Request, endpoint: "generations" 
 
   const requestRhParams = asStringMap(body.rh_params);
   const requestRhRandom = asBoolMap(body.rh_random);
+  const requestRhEmptyImage = asBoolMap(body.rh_empty_image);
   const requestHasInstanceType = typeof body.instance_type === "string" && body.instance_type.trim() !== "";
   const mapped = applyOpenAIParamsToRh(savedEntry?.fields, requestRhParams || savedEntry?.rhParams, {
     size: openai.size,
@@ -231,6 +232,7 @@ async function handleRunningHubImages(request: Request, endpoint: "generations" 
       n: openai.n,
       rhParams: mapped.rhParams,
       rhRandom: requestRhRandom || savedEntry?.rhRandom,
+      rhEmptyImage: requestRhEmptyImage || savedEntry?.rhEmptyImage,
       openaiMapping: mapped.mapping,
     },
     token

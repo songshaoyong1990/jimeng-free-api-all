@@ -163,6 +163,30 @@ function findFieldKeyByName(fields: RhSizeField[] | undefined, fieldName: string
   return hit ? fieldKey(hit) : "";
 }
 
+function isWidthFieldName(name: string) {
+  return /^(custom_)?width$|^w$/i.test(String(name || "").trim());
+}
+
+function isHeightFieldName(name: string) {
+  return /^(custom_)?height$|^h$/i.test(String(name || "").trim());
+}
+
+/** 同节点上的成对宽/高字段（如 custom_width ↔ custom_height） */
+function findSiblingDimensionKey(
+  fields: RhSizeField[] | undefined,
+  field: RhSizeField,
+  want: "width" | "height"
+) {
+  const nodeId = String(field.nodeId || "");
+  if (!nodeId) return "";
+  const hit = (fields || []).find((item) => {
+    if (String(item.nodeId || "") !== nodeId) return false;
+    const name = String(item.fieldName || "");
+    return want === "width" ? isWidthFieldName(name) : isHeightFieldName(name);
+  });
+  return hit ? fieldKey(hit) : "";
+}
+
 /** 按字段角色推断默认 OpenAI → 节点映射（可被管理台覆盖） */
 export function inferOpenAIMapping(fields: RhSizeField[] | undefined): RunningHubOpenAIMapping {
   const list = Array.isArray(fields) ? fields : [];
@@ -179,23 +203,33 @@ export function inferOpenAIMapping(fields: RhSizeField[] | undefined): RunningHu
 
 export function slimOpenAIMapping(input: any): RunningHubOpenAIMapping | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
-  const prompt = Array.isArray(input.prompt)
-    ? input.prompt.map((item: unknown) => String(item || "").trim()).filter(Boolean)
-    : undefined;
-  const images = Array.isArray(input.images)
-    ? input.images.map((item: unknown) => String(item || "").trim()).filter(Boolean)
-    : undefined;
-  const size = typeof input.size === "string" ? input.size.trim() : "";
-  const quality = typeof input.quality === "string" ? input.quality.trim() : "";
   const out: RunningHubOpenAIMapping = {};
-  if (prompt?.length) out.prompt = prompt;
-  if (images?.length) out.images = images;
-  if (size) out.size = size;
-  if (quality) out.quality = quality;
-  return Object.keys(out).length ? out : undefined;
+  let touched = false;
+  // 键存在且值不是 undefined 即视为用户已配置（含空串/空数组 = 显式不映射）
+  if ("prompt" in input && input.prompt !== undefined) {
+    touched = true;
+    out.prompt = Array.isArray(input.prompt)
+      ? input.prompt.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+      : [];
+  }
+  if ("images" in input && input.images !== undefined) {
+    touched = true;
+    out.images = Array.isArray(input.images)
+      ? input.images.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+      : [];
+  }
+  if ("size" in input && input.size !== undefined) {
+    touched = true;
+    out.size = typeof input.size === "string" ? input.size.trim() : "";
+  }
+  if ("quality" in input && input.quality !== undefined) {
+    touched = true;
+    out.quality = typeof input.quality === "string" ? input.quality.trim() : "";
+  }
+  return touched ? out : undefined;
 }
 
-/** 用已保存映射覆盖推断结果；无效 key 剔除 */
+/** 用已保存映射覆盖推断结果；无效 key 剔除。已保存的空值 = 显式不映射，不回落推断。 */
 export function resolveOpenAIMapping(
   fields: RhSizeField[] | undefined,
   saved?: RunningHubOpenAIMapping | null
@@ -203,27 +237,41 @@ export function resolveOpenAIMapping(
   const inferred = inferOpenAIMapping(fields);
   const valid = new Set((fields || []).map(fieldKey).filter(Boolean));
   const filterKeys = (keys?: string[]) => (keys || []).filter((key) => valid.has(key));
+  const hasSaved = saved != null && typeof saved === "object";
 
-  const prompt = saved?.prompt != null ? filterKeys(saved.prompt) : inferred.prompt;
-  const images = saved?.images != null ? filterKeys(saved.images) : inferred.images;
-  let size = saved?.size != null ? String(saved.size).trim() : inferred.size || "";
-  if (size && !valid.has(size)) size = inferred.size || "";
-  let quality =
-    saved?.quality != null ? String(saved.quality).trim() : inferred.quality || OPENAI_QUALITY_INSTANCE;
-  if (quality && quality !== OPENAI_QUALITY_INSTANCE && !valid.has(quality)) {
-    quality = OPENAI_QUALITY_INSTANCE;
+  const prompt = hasSaved && "prompt" in saved ? filterKeys(saved.prompt) : inferred.prompt;
+  const images = hasSaved && "images" in saved ? filterKeys(saved.images) : inferred.images;
+
+  let size = hasSaved && "size" in saved ? String(saved.size || "").trim() : inferred.size || "";
+  if (size && !valid.has(size)) {
+    size = hasSaved && "size" in saved ? "" : inferred.size || "";
   }
 
+  let quality =
+    hasSaved && "quality" in saved
+      ? String(saved.quality || "").trim()
+      : inferred.quality || OPENAI_QUALITY_INSTANCE;
+  if (quality && quality !== OPENAI_QUALITY_INSTANCE && !valid.has(quality)) {
+    quality = hasSaved && "quality" in saved ? "" : OPENAI_QUALITY_INSTANCE;
+  }
+
+  // 显式保存过的字段保留空串/空数组，方便 slim/再分析时不要丢「不映射」
   return {
-    prompt: prompt?.length ? prompt : undefined,
-    images: images?.length ? images : undefined,
-    size: size || undefined,
-    quality: quality || undefined,
+    prompt: hasSaved && "prompt" in saved ? prompt || [] : prompt?.length ? prompt : undefined,
+    images: hasSaved && "images" in saved ? images || [] : images?.length ? images : undefined,
+    size: hasSaved && "size" in saved ? size : size || undefined,
+    quality: hasSaved && "quality" in saved ? quality : quality || undefined,
   };
 }
 
 function pickSizeValue(field: RhSizeField, size: string) {
   if (!size) return "";
+  const wh = size.match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+  const name = String(field.fieldName || "").toLowerCase();
+  // INT 宽高字段：OpenAI 的 512x512 拆成单边数字
+  if (wh && isWidthFieldName(name)) return wh[1];
+  if (wh && isHeightFieldName(name)) return wh[2];
+
   const options = (field.options || []).map((item) => String(item));
   if (options.length) {
     const exact = options.find((item) => item === size || item.toLowerCase() === size.toLowerCase());
@@ -279,8 +327,20 @@ export function applyOpenAIParamsToRh(
       logger.info(`[OpenAIImages] size=${size} → ${widthKey}=${wh[1]}, ${heightKey}=${wh[2]}`);
     } else if (mappedSize && fieldByKey.has(mappedSize)) {
       const field = fieldByKey.get(mappedSize)!;
+      // pickSizeValue 对 width/height/custom_* 会把 512x512 拆成单边 INT，其它字段逻辑不变
       nextParams[mappedSize] = pickSizeValue(field, size);
-      logger.info(`[OpenAIImages] size=${size} → ${mappedSize} (映射)`);
+      // 兼容：映射到单边 INT 时，尽量补同节点另一边（不覆盖已有 rh_params）
+      if (wh) {
+        const name = String(field.fieldName || "");
+        if (isHeightFieldName(name)) {
+          const sibling = findSiblingDimensionKey(fields, field, "width");
+          if (sibling && !Object.prototype.hasOwnProperty.call(nextParams, sibling)) nextParams[sibling] = wh[1];
+        } else if (isWidthFieldName(name)) {
+          const sibling = findSiblingDimensionKey(fields, field, "height");
+          if (sibling && !Object.prototype.hasOwnProperty.call(nextParams, sibling)) nextParams[sibling] = wh[2];
+        }
+      }
+      logger.info(`[OpenAIImages] size=${size} → ${mappedSize}=${nextParams[mappedSize]} (映射)`);
     } else {
       logger.warn(`[OpenAIImages] size=${size} 未配置有效映射字段，已忽略`);
     }

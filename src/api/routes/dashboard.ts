@@ -50,6 +50,13 @@ async function analyzeAndBuildEntry(kind: 'app' | 'workflow', id: string) {
     analyzed.fields,
     prev?.openaiMapping || inferOpenAIMapping(analyzed.fields)
   );
+  // 已有 images 映射时，把新分析出的 IMAGE 字段追加到末尾（空映射=显式不映射则不追加）
+  const mappedImages = openaiMapping.images || [];
+  if (mappedImages.length > 0) {
+    const inferredImages = (inferOpenAIMapping(analyzed.fields).images || []).filter(Boolean);
+    const extras = inferredImages.filter((key) => !mappedImages.includes(key));
+    if (extras.length) openaiMapping.images = [...mappedImages, ...extras];
+  }
   return slimRunningHubEntry(
     {
       id: analyzed.id,
@@ -58,6 +65,7 @@ async function analyzeAndBuildEntry(kind: 'app' | 'workflow', id: string) {
       fields: analyzed.fields,
       rhParams: mergedParams,
       rhRandom: prev?.rhRandom,
+      rhEmptyImage: prev?.rhEmptyImage,
       openaiMapping,
       instanceType: prev?.instanceType || '',
       payment: prev?.payment || 'coin',

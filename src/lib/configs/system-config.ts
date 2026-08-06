@@ -49,7 +49,9 @@ export class SystemConfig {
             textLimit: '100mb',
             xmlLimit: '100mb',
             formidable: {
-                maxFileSize: '100mb'
+                maxFileSize: '100mb',
+                // 同名字段（如多个 image）保留为数组，否则多选参考图只会留下最后一张
+                multiples: true,
             },
             multipart: true,
             parsedMethods: ['POST', 'PUT', 'PATCH']
