@@ -5,12 +5,16 @@ export const OPENAI_IMAGE_MAX_N = 4;
 /** quality 映射到 RunningHub App instanceType，而非节点字段 */
 export const OPENAI_QUALITY_INSTANCE = "__instance_type__";
 
-/** OpenAI 请求字段 → RH 节点字段 key（nodeId::fieldName） */
+/** OpenAI 请求字段 → RH/Comfy 节点字段 key（nodeId::fieldName） */
 export type RunningHubOpenAIMapping = {
   /** 接收 prompt 的节点字段（可多个） */
   prompt?: string[];
   /** 按顺序接收 image/images 的节点字段 */
   images?: string[];
+  /** 按顺序接收 video/videos 的节点字段（Comfy VHS 等） */
+  videos?: string[];
+  /** 按顺序接收 audio/audios 的节点字段 */
+  audios?: string[];
   /** 接收 size 的节点字段 */
   size?: string;
   /** 接收 quality：节点字段 key，或 OPENAI_QUALITY_INSTANCE */
@@ -52,6 +56,10 @@ const KNOWN_OPENAI_KEYS = new Set([
   "stream",
   "image",
   "images",
+  "video",
+  "videos",
+  "audio",
+  "audios",
   "mask",
   // RH / 项目扩展（已知，不算「未知 OpenAI」）
   "negative_prompt",
@@ -65,6 +73,12 @@ const KNOWN_OPENAI_KEYS = new Set([
   "use_wallet",
   "rh_params",
   "rh_random",
+  "rh_empty_image",
+  "comfy_params",
+  "duration",
+  "seconds",
+  "ratio",
+  "resolution",
 ]);
 
 function pushImageSource(out: string[], value: unknown) {
@@ -89,7 +103,7 @@ function pushImageSource(out: string[], value: unknown) {
   }
 }
 
-function collectFilePaths(files: unknown): string[] {
+function collectFilePaths(files: unknown, keyPattern: RegExp): string[] {
   if (!files || typeof files !== "object") return [];
   const out: string[] = [];
   const pushFile = (file: any) => {
@@ -100,12 +114,16 @@ function collectFilePaths(files: unknown): string[] {
 
   const record = files as Record<string, any>;
   for (const key of Object.keys(record)) {
-    if (!/^(image|images|mask|file|files)/i.test(key) && key !== "0") continue;
+    if (!keyPattern.test(key) && key !== "0") continue;
     const value = record[key];
     if (Array.isArray(value)) value.forEach(pushFile);
     else pushFile(value);
   }
   return out;
+}
+
+function collectFilePathsLegacy(files: unknown): string[] {
+  return collectFilePaths(files, /^(image|images|mask|file|files)/i);
 }
 
 /** 从 OpenAI generations/edits 的 body + multipart 收集参考图来源 */
@@ -115,8 +133,28 @@ export function collectOpenAIInputImages(body: Record<string, any> = {}, files?:
   if (Array.isArray(body.image)) body.image.forEach((item) => pushImageSource(images, item));
   if (Array.isArray(body.images)) body.images.forEach((item) => pushImageSource(images, item));
   if (typeof body.filePath === "string" && body.filePath.trim()) images.push(body.filePath.trim());
-  images.push(...collectFilePaths(files));
+  images.push(...collectFilePathsLegacy(files));
   return _.uniq(images);
+}
+
+/** 收集参考视频（body.video(s) + multipart video/videos） */
+export function collectOpenAIInputVideos(body: Record<string, any> = {}, files?: unknown): string[] {
+  const videos: string[] = [];
+  pushImageSource(videos, body.video);
+  if (Array.isArray(body.video)) body.video.forEach((item) => pushImageSource(videos, item));
+  if (Array.isArray(body.videos)) body.videos.forEach((item) => pushImageSource(videos, item));
+  videos.push(...collectFilePaths(files, /^(video|videos)/i));
+  return _.uniq(videos);
+}
+
+/** 收集参考音频（body.audio(s) + multipart audio/audios） */
+export function collectOpenAIInputAudios(body: Record<string, any> = {}, files?: unknown): string[] {
+  const audios: string[] = [];
+  pushImageSource(audios, body.audio);
+  if (Array.isArray(body.audio)) body.audio.forEach((item) => pushImageSource(audios, item));
+  if (Array.isArray(body.audios)) body.audios.forEach((item) => pushImageSource(audios, item));
+  audios.push(...collectFilePaths(files, /^(audio|audios)/i));
+  return _.uniq(audios);
 }
 
 export function normalizeOpenAIImageBody(body: Record<string, any> = {}): OpenAIImageNormalized {
@@ -192,10 +230,16 @@ export function inferOpenAIMapping(fields: RhSizeField[] | undefined): RunningHu
   const list = Array.isArray(fields) ? fields : [];
   const prompt = list.filter((f) => f.role === "prompt").map(fieldKey).filter(Boolean);
   const images = list.filter((f) => f.role === "image").map(fieldKey).filter(Boolean);
-  const sizeField = list.find((f) => fieldLooksLikeSize(f) && f.role !== "image" && f.role !== "prompt");
+  const videos = list.filter((f) => f.role === "video").map(fieldKey).filter(Boolean);
+  const audios = list.filter((f) => f.role === "audio").map(fieldKey).filter(Boolean);
+  const sizeField = list.find(
+    (f) => fieldLooksLikeSize(f) && f.role !== "image" && f.role !== "prompt" && f.role !== "video" && f.role !== "audio"
+  );
   return {
     prompt: prompt.length ? prompt : undefined,
     images: images.length ? images : undefined,
+    videos: videos.length ? videos : undefined,
+    audios: audios.length ? audios : undefined,
     size: sizeField ? fieldKey(sizeField) || undefined : undefined,
     quality: OPENAI_QUALITY_INSTANCE,
   };
@@ -216,6 +260,18 @@ export function slimOpenAIMapping(input: any): RunningHubOpenAIMapping | undefin
     touched = true;
     out.images = Array.isArray(input.images)
       ? input.images.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+      : [];
+  }
+  if ("videos" in input && input.videos !== undefined) {
+    touched = true;
+    out.videos = Array.isArray(input.videos)
+      ? input.videos.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+      : [];
+  }
+  if ("audios" in input && input.audios !== undefined) {
+    touched = true;
+    out.audios = Array.isArray(input.audios)
+      ? input.audios.map((item: unknown) => String(item || "").trim()).filter(Boolean)
       : [];
   }
   if ("size" in input && input.size !== undefined) {
@@ -241,6 +297,8 @@ export function resolveOpenAIMapping(
 
   const prompt = hasSaved && "prompt" in saved ? filterKeys(saved.prompt) : inferred.prompt;
   const images = hasSaved && "images" in saved ? filterKeys(saved.images) : inferred.images;
+  const videos = hasSaved && "videos" in saved ? filterKeys(saved.videos) : inferred.videos;
+  const audios = hasSaved && "audios" in saved ? filterKeys(saved.audios) : inferred.audios;
 
   let size = hasSaved && "size" in saved ? String(saved.size || "").trim() : inferred.size || "";
   if (size && !valid.has(size)) {
@@ -259,6 +317,8 @@ export function resolveOpenAIMapping(
   return {
     prompt: hasSaved && "prompt" in saved ? prompt || [] : prompt?.length ? prompt : undefined,
     images: hasSaved && "images" in saved ? images || [] : images?.length ? images : undefined,
+    videos: hasSaved && "videos" in saved ? videos || [] : videos?.length ? videos : undefined,
+    audios: hasSaved && "audios" in saved ? audios || [] : audios?.length ? audios : undefined,
     size: hasSaved && "size" in saved ? size : size || undefined,
     quality: hasSaved && "quality" in saved ? quality : quality || undefined,
   };

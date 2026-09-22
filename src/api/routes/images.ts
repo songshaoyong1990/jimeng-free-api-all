@@ -3,6 +3,7 @@ import _ from "lodash";
 import Request from "@/lib/request/Request.ts";
 import { DEFAULT_MODEL, generateImagesWithRetry } from "@/api/controllers/images.ts";
 import { generateRunningHubImages, isRunningHubModel } from "@/api/controllers/runninghub.ts";
+import { generateComfyUIImages, isComfyUIModel } from "@/api/controllers/comfyui.ts";
 import { tokenSplit } from "@/api/controllers/core.ts";
 import util from "@/lib/util.ts";
 import db from "@/lib/database.ts";
@@ -10,9 +11,12 @@ import { decodeDuckImage, imageMimeForExt } from "@/lib/duck-decode.ts";
 import APIException from "@/lib/exceptions/APIException.ts";
 import EX from "@/api/consts/exceptions.ts";
 import { isRunningHubModelEnabled, isWalletPayment, resolveRunningHubEntry } from "@/lib/runninghub-config.ts";
+import { isComfyUIModelEnabled, resolveComfyUIEntry } from "@/lib/comfyui-config.ts";
 import {
   applyOpenAIParamsToRh,
+  collectOpenAIInputAudios,
   collectOpenAIInputImages,
+  collectOpenAIInputVideos,
   normalizeOpenAIImageBody,
 } from "@/lib/openai-images-compat.ts";
 import logger from "@/lib/logger.ts";
@@ -272,6 +276,117 @@ async function handleRunningHubImages(request: Request, endpoint: "generations" 
   return response;
 }
 
+async function handleComfyUIImages(request: Request, endpoint: "generations" | "edits") {
+  const body = request.body || {};
+  const comfyConfig = db.getComfyUIConfig();
+  let prompt = String(body.prompt || "").trim();
+  if (!prompt) {
+    throw new APIException(EX.API_REQUEST_PARAMS_INVALID, "prompt 不能为空");
+  }
+
+  const bodyModel = typeof body.model === "string" ? body.model : undefined;
+  const model =
+    bodyModel ||
+    (comfyConfig.defaultModel && isComfyUIModel(comfyConfig.defaultModel) ? comfyConfig.defaultModel : "");
+  if (!model || !isComfyUIModel(model)) {
+    throw new APIException(
+      EX.API_REQUEST_PARAMS_INVALID,
+      "无效的 ComfyUI 模型名，请使用 comfy:{id}"
+    );
+  }
+
+  if (!isComfyUIModelEnabled(comfyConfig, model)) {
+    throw new APIException(
+      EX.API_REQUEST_PARAMS_INVALID,
+      `ComfyUI 模型 ${model} 已在管理台禁用，请到 ComfyUI 页启用后再调用`
+    );
+  }
+
+  const savedEntry = resolveComfyUIEntry(comfyConfig, model);
+  if (!savedEntry?.workflowApi) {
+    throw new APIException(
+      EX.API_REQUEST_PARAMS_INVALID,
+      `未找到工作流 ${model}，请先在管理台导入 ComfyUI API JSON`
+    );
+  }
+
+  // 请求 prompt 为占位时，允许回落编辑器保存的默认长提示词（H3）
+  if (prompt === "placeholder" || prompt === "-") {
+    const keys = savedEntry.openaiMapping?.prompt || [];
+    const defaults = savedEntry.comfyParams || {};
+    const fromDefault = keys.map((k) => defaults[k]).find((v) => String(v || "").trim());
+    if (fromDefault) prompt = String(fromDefault).trim();
+  }
+
+  const openai = normalizeOpenAIImageBody(body);
+  const requestComfyParams = asStringMap(body.comfy_params) || asStringMap(body.rh_params);
+  const imageList = collectOpenAIInputImages(body, request.files);
+  const videoList = collectOpenAIInputVideos(body, request.files);
+  const audioList = collectOpenAIInputAudios(body, request.files);
+  if (endpoint === "edits" && !imageList.length && !videoList.length) {
+    throw new APIException(
+      EX.API_REQUEST_PARAMS_INVALID,
+      "edits 需要至少一张参考图/视频（image / video / multipart）"
+    );
+  }
+  const mappedImageSlots = Array.isArray(savedEntry?.openaiMapping?.images)
+    ? savedEntry.openaiMapping.images.filter(Boolean).length
+    : 0;
+  const mappedVideoSlots = Array.isArray(savedEntry?.openaiMapping?.videos)
+    ? savedEntry.openaiMapping.videos.filter(Boolean).length
+    : 0;
+  const mappedAudioSlots = Array.isArray(savedEntry?.openaiMapping?.audios)
+    ? savedEntry.openaiMapping.audios.filter(Boolean).length
+    : 0;
+
+  const durationRaw = body.duration != null && body.duration !== "" ? body.duration : body.seconds;
+  const durationNum = Number(durationRaw);
+  const duration = Number.isFinite(durationNum) && durationNum > 0 ? durationNum : undefined;
+  const ratio = typeof body.ratio === "string" ? body.ratio.trim() : "";
+  const resolution = typeof body.resolution === "string" ? body.resolution.trim() : "";
+
+  logger.info(
+    `[Images] /${endpoint} backend=ComfyUI model=${model} n=${openai.n} images=${imageList.length}/${mappedImageSlots} videos=${videoList.length}/${mappedVideoSlots} audios=${audioList.length}/${mappedAudioSlots} duration=${duration ?? "-"} ratio=${ratio || "-"} resolution=${resolution || "-"} response_format=${openai.responseFormat}`
+  );
+
+  const imageUrls = await generateComfyUIImages(
+    model,
+    prompt,
+    {
+      images: imageList,
+      videos: videoList,
+      audios: audioList,
+      baseUrl: typeof body.base_url === "string" ? body.base_url : comfyConfig.baseUrl,
+      n: openai.n,
+      duration,
+      ratio: ratio || undefined,
+      resolution: resolution || undefined,
+      size: openai.size || undefined,
+      comfyParams: requestComfyParams || savedEntry.comfyParams,
+      openaiMapping: savedEntry.openaiMapping,
+    },
+    savedEntry
+  );
+
+  const decode = savedEntry?.decode === true;
+  try {
+    const token = resolveAuthToken(request.headers.authorization) || "comfyui-local";
+    db.recordCall(token, model, 0);
+    imageUrls.forEach((url) => {
+      if (!url) return;
+      const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) || /[?&]filename=[^&]*\.(mp4|webm)/i.test(url);
+      db.saveMedia(isVideo ? "video" : "image", url, model, prompt, token);
+    });
+  } catch (e) {
+    // ignore
+  }
+
+  logger.info(`[Images] /${endpoint} ComfyUI 完成 model=${model} urls=${imageUrls.length} decode=${decode}`);
+  const built = await buildOpenAIImageResponse(imageUrls, openai.responseFormat, decode, "");
+  const { _meta, ...response } = built;
+  return response;
+}
+
 export default {
   prefix: "/v1/images",
 
@@ -300,10 +415,20 @@ export default {
         .validate("body.use_wallet", (v) => _.isUndefined(v) || _.isBoolean(v) || _.isString(v) || _.isNumber(v))
         .validate("body.rh_params", (v) => _.isUndefined(v) || _.isObject(v))
         .validate("body.rh_random", (v) => _.isUndefined(v) || _.isObject(v))
+        .validate("body.comfy_params", (v) => _.isUndefined(v) || _.isObject(v))
+        .validate("body.duration", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
+        .validate("body.seconds", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
+        .validate("body.ratio", isOptionalString)
+        .validate("body.resolution", isOptionalString)
         .validate("body.image", isOptionalStringOrArray)
-        .validate("body.images", (v) => _.isUndefined(v) || _.isArray(v));
+        .validate("body.images", (v) => _.isUndefined(v) || _.isArray(v))
+        .validate("body.video", isOptionalStringOrArray)
+        .validate("body.videos", (v) => _.isUndefined(v) || _.isArray(v))
+        .validate("body.audio", isOptionalStringOrArray)
+        .validate("body.audios", (v) => _.isUndefined(v) || _.isArray(v));
 
       const rhConfig = db.getRunningHubConfig();
+      const comfyConfig = db.getComfyUIConfig();
       const {
         model: bodyModel,
         prompt,
@@ -319,11 +444,14 @@ export default {
         bodyModel ||
         (rhConfig.defaultModel && isRunningHubModel(rhConfig.defaultModel)
           ? rhConfig.defaultModel
-          : DEFAULT_MODEL);
-      const useRunningHub = isRunningHubModel(model);
-
-      if (useRunningHub) {
+          : comfyConfig.defaultModel && isComfyUIModel(comfyConfig.defaultModel)
+            ? comfyConfig.defaultModel
+            : DEFAULT_MODEL);
+      if (isRunningHubModel(model)) {
         return handleRunningHubImages(request, "generations");
+      }
+      if (isComfyUIModel(model)) {
+        return handleComfyUIImages(request, "generations");
       }
 
       // —— 即梦路径保持原样 ——
@@ -333,13 +461,20 @@ export default {
       }
 
       let filePath = bodyFilePath;
-      // @ts-ignore
-      const files = request.files || {};
+      // multipart multiples:true 时同名字段可能是数组；只取第一张给即梦参考图
+      const files = (request.files || {}) as Record<string, any>;
       if (!filePath && !_.isEmpty(files)) {
-        const fileKey = Object.keys(files)[0];
-        const file = files[fileKey];
-        if (file) {
-          filePath = file.filepath || file.path;
+        for (const key of Object.keys(files)) {
+          const value = files[key];
+          const list = Array.isArray(value) ? value : value ? [value] : [];
+          for (const file of list) {
+            const p = file?.filepath || file?.path;
+            if (typeof p === "string" && p.trim()) {
+              filePath = p.trim();
+              break;
+            }
+          }
+          if (filePath) break;
         }
       }
 
@@ -386,13 +521,26 @@ export default {
         .validate("body.response_format", isOptionalString)
         .validate("body.image", isOptionalStringOrArray)
         .validate("body.images", (v) => _.isUndefined(v) || _.isArray(v))
+        .validate("body.video", isOptionalStringOrArray)
+        .validate("body.videos", (v) => _.isUndefined(v) || _.isArray(v))
+        .validate("body.audio", isOptionalStringOrArray)
+        .validate("body.audios", (v) => _.isUndefined(v) || _.isArray(v))
+        .validate("body.duration", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
+        .validate("body.seconds", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
+        .validate("body.ratio", isOptionalString)
+        .validate("body.resolution", isOptionalString)
         .validate("body.base_url", isOptionalString)
         .validate("body.instance_type", isOptionalString)
         .validate("body.payment", isOptionalString)
         .validate("body.use_wallet", (v) => _.isUndefined(v) || _.isBoolean(v) || _.isString(v) || _.isNumber(v))
         .validate("body.rh_params", (v) => _.isUndefined(v) || _.isObject(v))
-        .validate("body.rh_random", (v) => _.isUndefined(v) || _.isObject(v));
+        .validate("body.rh_random", (v) => _.isUndefined(v) || _.isObject(v))
+        .validate("body.comfy_params", (v) => _.isUndefined(v) || _.isObject(v));
 
+      const bodyModel = typeof request.body?.model === "string" ? request.body.model : "";
+      if (isComfyUIModel(bodyModel) || (!bodyModel && isComfyUIModel(db.getComfyUIConfig().defaultModel))) {
+        return handleComfyUIImages(request, "edits");
+      }
       return handleRunningHubImages(request, "edits");
     },
   },

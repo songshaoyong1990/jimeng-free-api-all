@@ -999,6 +999,9 @@
         display: flex;
         gap: 10px;
       }
+      .test-row[hidden] {
+        display: none !important;
+      }
       .test-row > * {
         flex: 1;
       }
@@ -1115,7 +1118,8 @@
       .test-result-item a {
         display: block;
       }
-      .test-result-grid img {
+      .test-result-grid img,
+      .test-result-grid video {
         width: 100%;
         border-radius: 10px;
         border: 1px solid var(--border);
@@ -1235,6 +1239,7 @@
         <button class="tab-btn" data-tab="logs">📋 实时日志</button>
         <button class="tab-btn" data-tab="media">🖼️ 媒体库</button>
         <button class="tab-btn" data-tab="runninghub">⚙️ RunningHub</button>
+        <button class="tab-btn" data-tab="comfyui">🖥️ ComfyUI</button>
         <button class="tab-btn" data-tab="test">🧪 接口测试</button>
       </div>
 
@@ -1432,6 +1437,63 @@
         </div>
       </div>
 
+      <!-- ComfyUI Tab -->
+      <div id="tab-comfyui" class="tab-content">
+        <div class="config-panel wide">
+          <h3>本地 ComfyUI</h3>
+          <div class="howto hint">
+            对齐「渠道 → RunningHub」用法：导入 ComfyUI「另存为 API」JSON，启用后用同一套 OpenAI 生图接口调用。
+            <ol>
+              <li>填写本机 ComfyUI Base URL（默认 <code>http://127.0.0.1:8188</code>），可点「测试连通」</li>
+              <li>导入 API JSON（文件或粘贴），自动分析字段 / 图槽 / 提示词槽</li>
+              <li>启用工作流 → 可「编辑节点」「查看 API」，与 RunningHub 一致</li>
+              <li>
+                <code>POST /v1/images/generations</code>，
+                <code>model</code> 用 <code>comfy:工作流id</code>；
+                节点参数与 OpenAI 映射以管理台保存为准
+              </li>
+            </ol>
+          </div>
+
+          <div class="form-group">
+            <label>ComfyUI Base URL</label>
+            <input type="text" id="comfy-base-url" placeholder="http://127.0.0.1:8188" />
+          </div>
+          <div class="form-group">
+            <label>默认模型</label>
+            <select id="comfy-default-model">
+              <option value="">不设置（请求必须传 model）</option>
+            </select>
+          </div>
+          <div class="config-actions">
+            <button class="btn" onclick="saveComfyUIConfig()">保存配置</button>
+            <button class="btn btn-secondary" onclick="loadComfyUIConfig()">重新加载</button>
+            <button class="btn btn-secondary" onclick="pingComfyUI()">测试连通</button>
+          </div>
+          <div id="comfy-config-msg" class="success-msg" style="display: none"></div>
+          <div id="comfy-config-error" class="error-msg" style="text-align: left"></div>
+
+          <div class="rh-section">
+            <h4>导入 / 工作流目录</h4>
+            <p class="hint" style="margin-bottom: 0">
+              启用后会出现在默认模型下拉，并出现在
+              <code>GET /v1/models</code>。导入会解析节点 inputs（跳过连线），推断 prompt / image 角色。
+            </p>
+            <div class="rh-toolbar" style="flex-wrap: wrap; gap: 8px">
+              <input type="text" id="comfy-import-title" placeholder="标题（可选），如：H3 多参考双采" style="flex: 1; min-width: 180px" />
+              <input type="file" id="comfy-import-file" accept="application/json,.json" />
+              <button class="btn btn-secondary" onclick="importComfyUIApi()">导入并分析</button>
+            </div>
+            <div class="form-group" style="margin-top: 12px">
+              <label>或粘贴 API JSON</label>
+              <textarea id="comfy-import-json" rows="6" placeholder='{"36":{"inputs":{...},"class_type":"VAELoader"}, ...}'></textarea>
+            </div>
+            <h4 style="margin-top: 18px">工作流</h4>
+            <div class="rh-entry-list" id="comfy-workflows-list"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Test Tab -->
       <div id="tab-test" class="tab-content">
         <div class="test-grid">
@@ -1440,11 +1502,14 @@
             <div class="form-group">
               <label>接口</label>
               <div class="test-seg" id="test-endpoint">
-                <button type="button" data-ep="generations" class="active">
+                <button type="button" data-ep="images/generations" class="active">
                   /v1/images/generations
                 </button>
-                <button type="button" data-ep="edits">
+                <button type="button" data-ep="images/edits">
                   /v1/images/edits
+                </button>
+                <button type="button" data-ep="videos/generations">
+                  /v1/videos/generations
                 </button>
               </div>
             </div>
@@ -1454,16 +1519,16 @@
               <input
                 type="text"
                 id="test-model-custom"
-                placeholder="或手填 model（如 app:123 / workflow:456，填了则覆盖上面）"
+                placeholder="或手填 model（如 jimeng-video-… / comfy:xxx / app:123）"
                 style="margin-top: 8px"
               />
             </div>
             <div class="form-group">
-              <label>API Key（可选；RH 模型留空则用管理台已配 RH Key）</label>
+              <label id="test-api-key-label">API Key（仅即梦 session / RH 可选；Comfy 本地留空）</label>
               <input
                 type="password"
                 id="test-api-key"
-                placeholder="Bearer 后面的 key"
+                placeholder="Comfy 无需填写；即梦填 Bearer 后的 session"
                 autocomplete="off"
               />
             </div>
@@ -1472,10 +1537,10 @@
               <textarea
                 id="test-prompt"
                 rows="3"
-                placeholder="描述要生成的图片，例如：一只在太空中飞行的柴犬，赛博朋克风格"
+                placeholder="描述要生成的内容，例如：一只在太空中飞行的柴犬，赛博朋克风格"
               ></textarea>
             </div>
-            <div class="test-row">
+            <div class="test-row" id="test-image-params">
               <div class="form-group" style="margin-bottom: 12px">
                 <label>数量 n</label>
                 <input type="number" id="test-n" value="1" min="1" max="10" />
@@ -1491,7 +1556,7 @@
                 </select>
               </div>
             </div>
-            <div class="test-row">
+            <div class="test-row" id="test-image-params2">
               <div class="form-group" style="margin-bottom: 12px">
                 <label>质量 quality</label>
                 <select id="test-quality">
@@ -1510,18 +1575,62 @@
                 </select>
               </div>
             </div>
+            <div class="test-row" id="test-video-params" hidden>
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>比例 ratio</label>
+                <select id="test-ratio">
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                  <option value="4:3">4:3</option>
+                  <option value="3:4">3:4</option>
+                  <option value="21:9">21:9</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>分辨率 resolution</label>
+                <select id="test-resolution">
+                  <option value="720p">720p</option>
+                  <option value="1080p">1080p</option>
+                  <option value="4k">4k</option>
+                </select>
+              </div>
+            </div>
+            <div class="test-row" id="test-video-params2" hidden>
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>时长 duration / seconds（秒）</label>
+                <select id="test-duration">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 12px">
+                <label>response_format</label>
+                <select id="test-video-response-format">
+                  <option value="url">url</option>
+                  <option value="b64_json">b64_json</option>
+                </select>
+              </div>
+            </div>
+            <div class="hint" id="test-video-api-hint" hidden style="margin: -4px 0 12px">
+              对应 <code>POST /v1/videos/generations</code>：
+              <code>model</code> · <code>prompt</code> · <code>ratio</code> · <code>resolution</code> ·
+              <code>duration</code>（或 <code>seconds</code>）· 首尾帧
+              <code>image</code>/<code>images</code>/<code>file_paths</code> · <code>response_format</code>。
+              不含生图字段 <code>n</code>/<code>size</code>/<code>quality</code>。
+            </div>
             <div class="form-group">
-              <label id="test-images-label">参考图 image（可选参考，可多选）</label>
-              <input type="file" id="test-images" name="image" accept="image/*" multiple />
+              <label id="test-images-label">参考媒体（图/视频/音频，可多选）</label>
+              <input type="file" id="test-images" accept="image/*,video/*,audio/*" multiple />
               <div class="test-images-actions">
                 <button type="button" class="rh-ed-linkbtn" id="test-images-clear" hidden>清空全部</button>
               </div>
               <div class="hint" id="test-images-hint" style="margin-top: 6px">
-                可多次点选追加；缩略图右上角删除单张。顺序对应 images[0]、images[1]…
+                H3 多参考：图片→image，视频→video，音频→audio（按选择顺序对应 &lt;Picture/Video/Audio N&gt;）
               </div>
               <div class="test-files" id="test-files"></div>
             </div>
-            <button class="btn" id="test-send" onclick="runImageTest()">
+            <button class="btn" id="test-send" onclick="runMediaTest()">
               🚀 发送请求
             </button>
           </div>
@@ -1531,7 +1640,7 @@
             <div id="test-status" class="test-status"></div>
             <div id="test-result">
               <div class="test-placeholder">
-                填写左侧参数并发送，返回的图片和原始响应会显示在这里
+                填写左侧参数并发送，返回的图片 / 视频和原始响应会显示在这里
               </div>
             </div>
           </div>
@@ -1606,7 +1715,7 @@
       // Check auth status on load
       async function checkAuth() {
         try {
-          const res = await fetch("/dashboard/status");
+          const res = await fetch("/dashboard/status", { credentials: "include" });
           const data = await res.json();
 
           if (!data.setupComplete) {
@@ -1709,6 +1818,7 @@
           if (btn.dataset.tab === "logs") loadLogs();
           else if (btn.dataset.tab === "media") loadMedia();
           else if (btn.dataset.tab === "runninghub") loadRunningHubConfig();
+          else if (btn.dataset.tab === "comfyui") loadComfyUIConfig();
           else if (btn.dataset.tab === "test") loadTestTab();
         });
       });
@@ -1859,7 +1969,15 @@
 
       function sortRhFields(list) {
         const roleRank = (role) =>
-          role === "prompt" ? 0 : role === "image" ? 1 : role === "video" || role === "audio" ? 2 : 3;
+          role === "prompt"
+            ? 0
+            : role === "image"
+              ? 1
+              : role === "video"
+                ? 2
+                : role === "audio"
+                  ? 3
+                  : 4;
         return [...(list || [])].sort((a, b) => {
           const rr = roleRank(a.role) - roleRank(b.role);
           if (rr) return rr;
@@ -1879,12 +1997,21 @@
         const list = fields || [];
         const prompt = list.filter((f) => f.role === "prompt").map(rhFieldKey);
         const images = list.filter((f) => f.role === "image").map(rhFieldKey);
+        const videos = list.filter((f) => f.role === "video").map(rhFieldKey);
+        const audios = list.filter((f) => f.role === "audio").map(rhFieldKey);
         const sizeField = list.find(
-          (f) => rhFieldLooksLikeSize(f) && f.role !== "image" && f.role !== "prompt"
+          (f) =>
+            rhFieldLooksLikeSize(f) &&
+            f.role !== "image" &&
+            f.role !== "prompt" &&
+            f.role !== "video" &&
+            f.role !== "audio"
         );
         return {
           prompt,
           images,
+          videos,
+          audios,
           size: sizeField ? rhFieldKey(sizeField) : "",
           quality: OA_QUALITY_INSTANCE,
         };
@@ -1894,8 +2021,8 @@
         const inferred = inferRhOpenAIMapping(fields);
         const valid = new Set((fields || []).map(rhFieldKey));
         const filterKeys = (keys) => (keys || []).filter((key) => valid.has(key));
-        // images 槽位：空串保留占位（「不映射」/刚增加的槽），无效 key 清空但不断槽
-        const filterImageSlots = (keys) =>
+        // 槽位：空串保留占位（「不映射」/刚增加的槽），无效 key 清空但不断槽
+        const filterSlots = (keys) =>
           (keys || []).map((key) => {
             const k = String(key || "").trim();
             if (!k) return "";
@@ -1905,7 +2032,11 @@
         const hasSaved = saved && typeof saved === "object";
         const prompt = hasSaved && "prompt" in saved ? filterKeys(saved.prompt) : inferred.prompt;
         const images =
-          hasSaved && "images" in saved ? filterImageSlots(saved.images) : inferred.images;
+          hasSaved && "images" in saved ? filterSlots(saved.images) : inferred.images;
+        const videos =
+          hasSaved && "videos" in saved ? filterSlots(saved.videos) : inferred.videos;
+        const audios =
+          hasSaved && "audios" in saved ? filterSlots(saved.audios) : inferred.audios;
         let size = hasSaved && "size" in saved ? String(saved.size || "") : inferred.size;
         if (size && !valid.has(size)) size = hasSaved && "size" in saved ? "" : inferred.size;
         let quality =
@@ -1913,7 +2044,14 @@
         if (quality && quality !== OA_QUALITY_INSTANCE && !valid.has(quality)) {
           quality = hasSaved && "quality" in saved ? "" : OA_QUALITY_INSTANCE;
         }
-        return { prompt: prompt || [], images: images || [], size: size || "", quality: quality || "" };
+        return {
+          prompt: prompt || [],
+          images: images || [],
+          videos: videos || [],
+          audios: audios || [],
+          size: size || "",
+          quality: quality || "",
+        };
       }
 
       function openaiBadgesForField(key, mapping) {
@@ -1921,6 +2059,10 @@
         if ((mapping.prompt || []).includes(key)) tags.push("prompt");
         const imgIdx = (mapping.images || []).indexOf(key);
         if (imgIdx >= 0) tags.push("images[" + imgIdx + "]");
+        const vidIdx = (mapping.videos || []).indexOf(key);
+        if (vidIdx >= 0) tags.push("videos[" + vidIdx + "]");
+        const audIdx = (mapping.audios || []).indexOf(key);
+        if (audIdx >= 0) tags.push("audios[" + audIdx + "]");
         if (mapping.size === key) tags.push("size");
         if (mapping.quality === key) tags.push("quality");
         return tags
@@ -1954,6 +2096,8 @@
         rhEditor.explicitMappingKeys = {
           prompt: !!(rawMapping && "prompt" in rawMapping),
           images: !!(rawMapping && "images" in rawMapping),
+          videos: !!(rawMapping && "videos" in rawMapping),
+          audios: !!(rawMapping && "audios" in rawMapping),
           size: !!(rawMapping && "size" in rawMapping),
           quality: !!(rawMapping && "quality" in rawMapping),
         };
@@ -1976,6 +2120,24 @@
         rhEditor = null;
       }
 
+      function buildMediaSlotList(mappingSlots, candidates, explicit, maxSlots, minSuggest) {
+        const list = (
+          explicit
+            ? [...(mappingSlots || [])]
+            : mappingSlots && mappingSlots.length
+              ? [...mappingSlots]
+              : candidates.map(rhFieldKey)
+        ).slice(0, maxSlots);
+        if (!explicit) {
+          while (list.length < Math.min(minSuggest, candidates.length)) {
+            list.push(
+              candidates[list.length] ? rhFieldKey(candidates[list.length]) : ""
+            );
+          }
+        }
+        return list;
+      }
+
       function renderRhEditorForm() {
         const form = document.getElementById("rh-editor-form");
         if (!rhEditor) {
@@ -1983,6 +2145,7 @@
           return;
         }
         const entry = rhEditor.entry;
+        const isComfy = rhEditor.backend === "comfy";
         const fields = entry.fields || [];
         const mapping = resolveRhOpenAIMapping(fields, entry.openaiMapping);
         entry.openaiMapping = mapping;
@@ -2002,29 +2165,48 @@
             f.role !== "audio"
         );
         const imageCandidates = fields.filter(
-          (f) => f.enabled !== false && (f.role === "image" || /image|img|mask/i.test(f.fieldName || ""))
+          (f) =>
+            f.enabled !== false &&
+            (f.role === "image" || /^(image|img|mask)$/i.test(f.fieldName || "") || /ref_image/i.test(f.fieldName || ""))
+        );
+        const videoCandidates = fields.filter(
+          (f) =>
+            f.enabled !== false &&
+            (f.role === "video" || /^video$/i.test(f.fieldName || "") || /ref_video|loadvideo|vhs/i.test(`${f.fieldName || ""} ${f.classType || ""}`))
+        );
+        const audioCandidates = fields.filter(
+          (f) =>
+            f.enabled !== false &&
+            (f.role === "audio" || /^audio$/i.test(f.fieldName || "") || /ref_audio|loadaudio/i.test(`${f.fieldName || ""} ${f.classType || ""}`))
         );
         const sizeCandidates = fields.filter(
           (f) => f.enabled !== false && f.role !== "image" && f.role !== "video" && f.role !== "audio"
         );
-        // 已显式保存过 images（含空数组=全部不映射）时，禁止回填候选字段
         const explicitImages = !!(rhEditor.explicitMappingKeys && rhEditor.explicitMappingKeys.images);
-        const imageSlots = (
-          explicitImages
-            ? [...(mapping.images || [])]
-            : mapping.images && mapping.images.length
-              ? [...mapping.images]
-              : imageCandidates.map(rhFieldKey)
-        ).slice(0, 7);
-        if (!explicitImages) {
-          while (imageSlots.length < Math.min(2, imageCandidates.length)) {
-            imageSlots.push(
-              imageCandidates[imageSlots.length]
-                ? rhFieldKey(imageCandidates[imageSlots.length])
-                : ""
-            );
-          }
-        }
+        const explicitVideos = !!(rhEditor.explicitMappingKeys && rhEditor.explicitMappingKeys.videos);
+        const explicitAudios = !!(rhEditor.explicitMappingKeys && rhEditor.explicitMappingKeys.audios);
+        const maxMediaSlots = isComfy ? 16 : 7;
+        const imageSlots = buildMediaSlotList(
+          mapping.images,
+          imageCandidates,
+          explicitImages,
+          maxMediaSlots,
+          isComfy ? Math.min(9, imageCandidates.length) : 2
+        );
+        const videoSlots = buildMediaSlotList(
+          mapping.videos,
+          videoCandidates,
+          explicitVideos,
+          maxMediaSlots,
+          Math.min(3, videoCandidates.length)
+        );
+        const audioSlots = buildMediaSlotList(
+          mapping.audios,
+          audioCandidates,
+          explicitAudios,
+          maxMediaSlots,
+          Math.min(3, audioCandidates.length)
+        );
 
         const fieldSelectOptions = (list, selected, includeInstance) => {
           const opts = [`<option value="">不映射</option>`];
@@ -2048,19 +2230,41 @@
 
         const sortedPromptCandidates = sortRhFields(promptCandidates);
         const sortedImageCandidates = sortRhFields(imageCandidates);
+        const sortedVideoCandidates = sortRhFields(videoCandidates);
+        const sortedAudioCandidates = sortRhFields(audioCandidates);
         const sortedSizeCandidates = sortRhFields(sizeCandidates);
+
+        const renderSlots = (tag, slots, candidates, dataAttr) =>
+          slots.length
+            ? slots
+                .map((selected, i) => {
+                  return `<div class="rh-ed-slot">
+                              <span class="slot-idx">${tag}[${i}]</span>
+                              <select data-oa-${dataAttr}-slot="${i}">${fieldSelectOptions(
+                    candidates,
+                    selected,
+                    false
+                  )}</select>
+                            </div>`;
+                })
+                .join("")
+            : `<div class='hint'>未识别到 ${tag} 字段；重新分析后会出现在此</div>`;
 
         // ── 左栏：OpenAI 请求映射 ──
         const mapHtml = `
           <div class="rh-ed-col">
             <div class="rh-ed-col-head">
               <h3>OpenAI 请求 → 节点字段</h3>
-              <p>客户端发的 OpenAI 字段按此写入节点；「不映射」则不自动填充。</p>
+              <p>${
+                isComfy
+                  ? "H3 多参考：prompt / images / videos / audios 按槽位顺序写入 Load* 节点；未映射的槽保留工作流原值。"
+                  : "客户端发的 OpenAI 字段按此写入节点；「不映射」则不自动填充。"
+              }</p>
             </div>
             <div class="rh-ed-col-body">
               <div class="rh-ed-map-item">
                 <span class="oa-tag">prompt</span>
-                <div class="hint">勾选接收提示词的字段（可多选）</div>
+                <div class="hint">勾选接收提示词的字段（可多选；H3 通常为 Text 节点）</div>
                 <div class="rh-editor-checks" id="rh-map-prompt">
                   ${
                     sortedPromptCandidates.length
@@ -2082,29 +2286,39 @@
 
               <div class="rh-ed-map-item">
                 <span class="oa-tag">images[]</span>
-                <div class="hint">参考图按顺序填入所选 IMAGE 字段</div>
+                <div class="hint">参考图按顺序 → &lt;Picture N&gt; / LoadImage（images[0]=第一张）</div>
                 <div id="rh-map-images">
-                  ${
-                    imageSlots.length
-                      ? imageSlots
-                          .map((selected, i) => {
-                            return `<div class="rh-ed-slot">
-                              <span class="slot-idx">images[${i}]</span>
-                              <select data-oa-image-slot="${i}">${fieldSelectOptions(
-                              sortedImageCandidates,
-                              selected,
-                              false
-                            )}</select>
-                            </div>`;
-                          })
-                          .join("")
-                      : "<div class='hint'>未识别到 IMAGE 字段；重新分析后若识别为图片会出现在此</div>"
-                  }
+                  ${renderSlots("images", imageSlots, sortedImageCandidates, "image")}
                   <button type="button" class="rh-ed-linkbtn" id="rh-map-add-image">+ 增加 images 槽位</button>
                 </div>
               </div>
 
               <div class="rh-ed-map-item">
+                <span class="oa-tag">videos[]</span>
+                <div class="hint">参考视频按顺序 → &lt;Video N&gt; / VHS_LoadVideo</div>
+                <div id="rh-map-videos">
+                  ${renderSlots("videos", videoSlots, sortedVideoCandidates, "video")}
+                  <button type="button" class="rh-ed-linkbtn" id="rh-map-add-video">+ 增加 videos 槽位</button>
+                </div>
+              </div>
+
+              <div class="rh-ed-map-item">
+                <span class="oa-tag">audios[]</span>
+                <div class="hint">参考音频按顺序 → &lt;Audio N&gt; / LoadAudio</div>
+                <div id="rh-map-audios">
+                  ${renderSlots("audios", audioSlots, sortedAudioCandidates, "audio")}
+                  <button type="button" class="rh-ed-linkbtn" id="rh-map-add-audio">+ 增加 audios 槽位</button>
+                </div>
+              </div>
+
+              ${
+                isComfy
+                  ? `<div class="rh-ed-map-item">
+                <span class="oa-tag">size</span>
+                <div class="hint">可选：写入宽高/分辨率类字段（H3 通常由节点图内部控制）</div>
+                <select id="rh-map-size">${fieldSelectOptions(sortedSizeCandidates, mapping.size, false)}</select>
+              </div>`
+                  : `<div class="rh-ed-map-item">
                 <span class="oa-tag">size</span>
                 <div class="hint">写入尺寸/比例类字段</div>
                 <select id="rh-map-size">${fieldSelectOptions(sortedSizeCandidates, mapping.size, false)}</select>
@@ -2118,7 +2332,8 @@
                   mapping.quality,
                   true
                 )}</select>
-              </div>
+              </div>`
+              }
 
               <button type="button" class="rh-ed-linkbtn" id="rh-map-reset">↺ 恢复自动推断</button>
             </div>
@@ -2129,6 +2344,8 @@
         const allShown = [
           ...fields.filter((f) => f.role === "prompt" && f.enabled !== false),
           ...fields.filter((f) => f.role === "image" && f.enabled !== false),
+          ...fields.filter((f) => f.role === "video" && f.enabled !== false),
+          ...fields.filter((f) => f.role === "audio" && f.enabled !== false),
           ...editable,
         ];
         const seen = new Set();
@@ -2161,19 +2378,32 @@
               let control = "";
               if (field.role === "image" || field.role === "video" || field.role === "audio") {
                 const emptyOn = !!(entry.rhEmptyImage && entry.rhEmptyImage[key]);
-                control =
-                  field.role === "image"
-                    ? `<div class="hint" style="color:var(--text-secondary);font-size:12px">由 OpenAI <code>images</code> 映射填充（见左栏）</div>
+                const mediaTag =
+                  field.role === "image" ? "images" : field.role === "video" ? "videos" : "audios";
+                if (isComfy) {
+                  control = `<div class="hint" style="color:var(--text-secondary);font-size:12px">由 OpenAI <code>${mediaTag}</code> 按左栏槽位填充；下方可填默认文件名（请求未带媒体时用，空则保留工作流原值）</div>
+                  <input type="text" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(
+                    value === "None" ? "" : value
+                  )}" placeholder="默认文件名，可留空" />`;
+                } else if (field.role === "image") {
+                  control = `<div class="hint" style="color:var(--text-secondary);font-size:12px">由 OpenAI <code>images</code> 映射填充（见左栏）</div>
                   <label class="toggle" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px">
                     <input type="checkbox" data-rh-empty-image="${escapeHtml(key)}" ${
-                        emptyOn ? "checked" : ""
-                      }/> 无图时仍提交空值
-                  </label>`
-                    : `<div class="hint" style="color:var(--text-secondary);font-size:12px">媒体字段由请求映射填充</div>`;
+                      emptyOn ? "checked" : ""
+                    }/> 无图时仍提交空值
+                  </label>`;
+                } else {
+                  control = `<div class="hint" style="color:var(--text-secondary);font-size:12px">媒体字段由请求 <code>${mediaTag}</code> 映射填充</div>`;
+                }
               } else if (field.role === "prompt" && (mapping.prompt || []).includes(key)) {
-                control = `<input type="text" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(
-                  value
-                )}" placeholder="仅当请求未带 prompt 时使用的默认提示词" />`;
+                const long = String(value || "").length > 120 || isComfy;
+                control = long
+                  ? `<textarea data-rh-param="${escapeHtml(key)}" rows="6" placeholder="仅当请求未带 prompt 时使用的默认提示词（H3 Ref2VA 六段）">${escapeHtml(
+                      value
+                    )}</textarea>`
+                  : `<input type="text" data-rh-param="${escapeHtml(key)}" value="${escapeHtml(
+                      value
+                    )}" placeholder="仅当请求未带 prompt 时使用的默认提示词" />`;
               } else if (field.role === "boolean") {
                 control = `<select data-rh-param="${escapeHtml(key)}">
                   <option value="true" ${String(value) === "true" ? "selected" : ""}>true</option>
@@ -2241,7 +2471,10 @@
         `;
 
         form.innerHTML = `
-          <div class="rh-ed-settings">
+          ${
+            isComfy
+              ? `<div class="hint" style="margin-bottom:12px">本地 ComfyUI / MiniMax H3：左栏映射 prompt·images·videos·audios；右栏可改默认文件名与长提示词。未传媒体的槽保留工作流原值（含 None）。</div>`
+              : `<div class="rh-ed-settings">
             <div class="rh-ed-setting">
               <span>计费方式</span>
               <select id="rh-editor-payment">
@@ -2256,7 +2489,8 @@
                 <option value="plus" ${entry.instanceType === "plus" ? "selected" : ""}>48G plus</option>
               </select>
             </div>
-          </div>
+          </div>`
+          }
           <div class="rh-ed-grid">
             ${mapHtml}
             ${paramsHtml}
@@ -2269,29 +2503,47 @@
             if (input) input.disabled = el.checked;
           });
         });
-        const addBtn = document.getElementById("rh-map-add-image");
-        if (addBtn) {
+
+        const bindAddSlot = (btnId, kind, roleCheck, maxSlots) => {
+          const addBtn = document.getElementById(btnId);
+          if (!addBtn) return;
           addBtn.addEventListener("click", () => {
             collectRhEditorMappingIntoEntry();
-            const cur = [...(rhEditor.entry.openaiMapping.images || [])];
-            if (cur.length >= 7) return;
+            const cur = [...(rhEditor.entry.openaiMapping[kind] || [])];
+            if (cur.length >= maxSlots) return;
             const used = new Set(cur.filter(Boolean));
             const nextField = (rhEditor.entry.fields || []).find((f) => {
               if (f.enabled === false) return false;
-              const isImg =
-                f.role === "image" || /image|img|mask/i.test(String(f.fieldName || ""));
-              if (!isImg) return false;
+              if (!roleCheck(f)) return false;
               const key = rhFieldKey(f);
               return key && !used.has(key);
             });
-            // 优先填入尚未映射的 IMAGE 字段；没有则留空槽供手动选
             cur.push(nextField ? rhFieldKey(nextField) : "");
-            rhEditor.entry.openaiMapping.images = cur;
+            rhEditor.entry.openaiMapping[kind] = cur;
             if (!rhEditor.explicitMappingKeys) rhEditor.explicitMappingKeys = {};
-            rhEditor.explicitMappingKeys.images = true;
+            rhEditor.explicitMappingKeys[kind] = true;
             renderRhEditorForm();
           });
-        }
+        };
+        bindAddSlot(
+          "rh-map-add-image",
+          "images",
+          (f) => f.role === "image" || /image|img|mask/i.test(String(f.fieldName || "")),
+          maxMediaSlots
+        );
+        bindAddSlot(
+          "rh-map-add-video",
+          "videos",
+          (f) => f.role === "video" || /video/i.test(String(f.fieldName || "")),
+          maxMediaSlots
+        );
+        bindAddSlot(
+          "rh-map-add-audio",
+          "audios",
+          (f) => f.role === "audio" || /audio/i.test(String(f.fieldName || "")),
+          maxMediaSlots
+        );
+
         const resetBtn = document.getElementById("rh-map-reset");
         if (resetBtn) {
           resetBtn.addEventListener("click", () => {
@@ -2299,6 +2551,8 @@
             rhEditor.explicitMappingKeys = {
               prompt: true,
               images: true,
+              videos: true,
+              audios: true,
               size: true,
               quality: true,
             };
@@ -2313,22 +2567,34 @@
         document.querySelectorAll("#rh-editor-form [data-oa-prompt]:checked").forEach((el) => {
           if (el.value) prompt.push(el.value);
         });
-        // 保留空串槽位：否则「+ 增加 images 槽位」立刻被丢掉
+        // 保留空串槽位：否则「+ 增加槽位」立刻被丢掉
         const images = [];
         document.querySelectorAll("#rh-editor-form [data-oa-image-slot]").forEach((el) => {
           images.push(el.value || "");
+        });
+        const videos = [];
+        document.querySelectorAll("#rh-editor-form [data-oa-video-slot]").forEach((el) => {
+          videos.push(el.value || "");
+        });
+        const audios = [];
+        document.querySelectorAll("#rh-editor-form [data-oa-audio-slot]").forEach((el) => {
+          audios.push(el.value || "");
         });
         const sizeEl = document.getElementById("rh-map-size");
         const qualityEl = document.getElementById("rh-map-quality");
         rhEditor.entry.openaiMapping = {
           prompt,
           images,
+          videos,
+          audios,
           size: sizeEl ? sizeEl.value : "",
-          quality: qualityEl ? qualityEl.value : "",
+          quality: qualityEl ? qualityEl.value : rhEditor.entry.openaiMapping?.quality || "",
         };
         rhEditor.explicitMappingKeys = {
           prompt: true,
           images: true,
+          videos: true,
+          audios: true,
           size: true,
           quality: true,
         };
@@ -2337,8 +2603,12 @@
       function collectRhEditorDraft() {
         if (!rhEditor) return null;
         const entry = rhEditor.entry;
-        entry.payment = document.getElementById("rh-editor-payment").value;
-        entry.instanceType = document.getElementById("rh-editor-instance").value;
+        if (rhEditor.backend !== "comfy") {
+          const payEl = document.getElementById("rh-editor-payment");
+          const instEl = document.getElementById("rh-editor-instance");
+          if (payEl) entry.payment = payEl.value;
+          if (instEl) entry.instanceType = instEl.value;
+        }
         collectRhEditorMappingIntoEntry();
         const rhParams = { ...(entry.rhParams || {}) };
         const rhRandom = { ...(entry.rhRandom || {}) };
@@ -2364,6 +2634,8 @@
         entry.openaiMapping = {
           prompt: Array.isArray(map.prompt) ? map.prompt : [],
           images: Array.isArray(map.images) ? map.images : [],
+          videos: Array.isArray(map.videos) ? map.videos : [],
+          audios: Array.isArray(map.audios) ? map.audios : [],
           size: map.size != null ? String(map.size) : "",
           quality: map.quality != null ? String(map.quality) : "",
         };
@@ -2375,6 +2647,38 @@
         errorEl.textContent = "";
         const entry = collectRhEditorDraft();
         if (!entry || !rhEditor) return;
+
+        // ComfyUI：落到 comfyParams，走 /dashboard/comfyui
+        if (rhEditor.backend === "comfy") {
+          const saved = {
+            ...comfyState.workflows[rhEditor.index],
+            ...entry,
+            comfyParams: entry.rhParams || {},
+            openaiMapping: entry.openaiMapping,
+            decode: comfyState.workflows[rhEditor.index]?.decode === true,
+          };
+          delete saved.rhParams;
+          delete saved.rhRandom;
+          delete saved.rhEmptyImage;
+          delete saved.payment;
+          delete saved.instanceType;
+          delete saved.appId;
+          delete saved.workflowId;
+          comfyState.workflows[rhEditor.index] = saved;
+          try {
+            await persistComfyWorkflows();
+            const msgEl = document.getElementById("comfy-config-msg");
+            if (msgEl) {
+              msgEl.textContent = "节点参数已保存";
+              msgEl.style.display = "block";
+            }
+            closeRhEditor();
+          } catch (e) {
+            errorEl.textContent = e.message || "保存失败";
+          }
+          return;
+        }
+
         const kind = rhEditor.kind;
         const list = kind === "app" ? [...rhState.rhApps] : [...rhState.rhWorkflows];
         list[rhEditor.index] = entry;
@@ -2405,6 +2709,16 @@
       function previewRhEditorApi() {
         const entry = collectRhEditorDraft();
         if (!entry || !rhEditor) return;
+        if (rhEditor.backend === "comfy") {
+          const draft = {
+            ...comfyState.workflows[rhEditor.index],
+            ...entry,
+            comfyParams: entry.rhParams || {},
+            analysis: comfyState.workflows[rhEditor.index]?.analysis || entry.analysis,
+          };
+          showComfyApiExampleFromEntry(draft);
+          return;
+        }
         const list = rhEditor.kind === "app" ? rhState.rhApps : rhState.rhWorkflows;
         const backup = list[rhEditor.index];
         list[rhEditor.index] = entry;
@@ -2638,12 +2952,492 @@
         }
       }
 
+      // —— ComfyUI 本地（对齐 RunningHub 目录 / 编辑节点 / 查看 API）——
+      let comfyState = { workflows: [], defaultModel: "", baseUrl: "" };
+
+      function comfyMsg(text, isError) {
+        const msgEl = document.getElementById("comfy-config-msg");
+        const errorEl = document.getElementById("comfy-config-error");
+        if (msgEl) {
+          msgEl.style.display = text && !isError ? "block" : "none";
+          if (!isError) msgEl.textContent = text || "";
+        }
+        if (errorEl) errorEl.textContent = isError ? text || "" : "";
+      }
+
+      function comfyModelId(entry) {
+        return "comfy:" + (entry.id || "");
+      }
+
+      function applyComfyUIData(data) {
+        comfyState = {
+          workflows: Array.isArray(data.workflows) ? data.workflows : [],
+          defaultModel: data.defaultModel || "",
+          baseUrl: data.baseUrl || "http://127.0.0.1:8188",
+        };
+        const baseInput = document.getElementById("comfy-base-url");
+        if (baseInput) baseInput.value = comfyState.baseUrl;
+        const sel = document.getElementById("comfy-default-model");
+        if (sel) {
+          const models = (data.models || []).slice();
+          sel.innerHTML =
+            `<option value="">不设置（请求必须传 model）</option>` +
+            models
+              .map(
+                (m) =>
+                  `<option value="${escapeHtml(m)}" ${
+                    m === comfyState.defaultModel ? "selected" : ""
+                  }>${escapeHtml(m)}</option>`
+              )
+              .join("");
+        }
+        renderComfyWorkflows();
+      }
+
+      function renderComfyWorkflows() {
+        const el = document.getElementById("comfy-workflows-list");
+        if (!el) return;
+        const entries = comfyState.workflows || [];
+        if (!entries.length) {
+          el.innerHTML = `<div class="rh-empty">暂无条目，请导入 ComfyUI API JSON</div>`;
+          bindComfyListActions();
+          return;
+        }
+        el.innerHTML = entries
+          .map((entry, index) => {
+            const modelId = comfyModelId(entry);
+            const enabled = entry.enabled !== false;
+            const analysis = entry.analysis;
+            let analysisHtml = `<div class="analysis warn">尚未分析，<a href="javascript:void(0)" data-comfy-action="analyze" data-comfy-index="${index}">点击重新分析</a>拉取字段</div>`;
+            if (analysis) {
+              analysisHtml = `<div class="analysis ok">已分析：字段 ${
+                analysis.fieldCount || 0
+              } · 图 ${analysis.imageCount || 0} · 视频 ${
+                analysis.videoCount || 0
+              } · 音频 ${analysis.audioCount || 0} · 提示词 ${
+                analysis.promptCount || 0
+              } · 节点 ${analysis.nodeCount || 0} · <a href="javascript:void(0)" data-comfy-action="api" data-comfy-index="${index}">查看 API</a></div>`;
+            }
+            return `
+              <div class="rh-entry" data-comfy-index="${index}">
+                <div class="meta">
+                  <div class="title">${escapeHtml(entry.title || modelId)}</div>
+                  <div class="id">${escapeHtml(modelId)}</div>
+                  ${analysisHtml}
+                </div>
+                <div class="actions">
+                  <label class="toggle">
+                    <input type="checkbox" data-comfy-action="toggle" data-comfy-index="${index}" ${
+                      enabled ? "checked" : ""
+                    } />
+                    启用
+                  </label>
+                  <label class="toggle" title="开启后返回的图片由服务端解码为 data URL 返回">
+                    <input type="checkbox" data-comfy-action="decode" data-comfy-index="${index}" ${
+                      entry.decode ? "checked" : ""
+                    } />
+                    解码
+                  </label>
+                  ${
+                    analysis
+                      ? `<button type="button" class="btn btn-secondary" style="width:auto;padding:6px 10px;font-size:12px" data-comfy-action="edit" data-comfy-index="${index}">编辑节点</button>
+                      <button type="button" class="btn btn-secondary" style="width:auto;padding:6px 10px;font-size:12px" data-comfy-action="api" data-comfy-index="${index}">查看 API</button>`
+                      : ""
+                  }
+                  <button type="button" class="btn btn-secondary" style="width:auto;padding:6px 10px;font-size:12px" data-comfy-action="analyze" data-comfy-index="${index}">重新分析</button>
+                  <button type="button" class="btn btn-danger" style="width:auto;padding:6px 10px;font-size:12px" data-comfy-action="remove" data-comfy-index="${index}">删除</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+        bindComfyListActions();
+      }
+
+      function bindComfyListActions() {
+        const el = document.getElementById("comfy-workflows-list");
+        if (!el || el.dataset.comfyBound === "1") return;
+        el.dataset.comfyBound = "1";
+        el.addEventListener("click", (event) => {
+          const target = event.target.closest("[data-comfy-action]");
+          if (!target || !el.contains(target)) return;
+          const action = target.getAttribute("data-comfy-action");
+          const index = Number(target.getAttribute("data-comfy-index"));
+          if (Number.isNaN(index)) return;
+          if (action === "analyze") {
+            event.preventDefault();
+            void reanalyzeComfy(index);
+          } else if (action === "edit") {
+            event.preventDefault();
+            openComfyEditor(index);
+          } else if (action === "api") {
+            event.preventDefault();
+            showComfyApiExample(index);
+          } else if (action === "remove") {
+            event.preventDefault();
+            deleteComfyWorkflow(index);
+          }
+        });
+        el.addEventListener("change", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLInputElement)) return;
+          const action = target.getAttribute("data-comfy-action");
+          if (action !== "toggle" && action !== "decode") return;
+          const index = Number(target.getAttribute("data-comfy-index"));
+          if (Number.isNaN(index)) return;
+          if (action === "toggle") toggleComfyEnabled(index, target.checked);
+          else setComfyDecode(index, target.checked);
+        });
+      }
+
+      async function persistComfyWorkflows() {
+        const res = await fetch("/dashboard/comfyui", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workflows: comfyState.workflows }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "更新失败");
+        applyComfyUIData(data.data || data);
+      }
+
+      async function loadComfyUIConfig() {
+        comfyMsg("");
+        try {
+          const res = await fetch("/dashboard/comfyui", { credentials: "include" });
+          if (!res.ok) {
+            comfyMsg("加载失败，请重新登录", true);
+            return;
+          }
+          applyComfyUIData(await res.json());
+        } catch (e) {
+          comfyMsg("加载失败", true);
+        }
+      }
+
+      async function saveComfyUIConfig() {
+        comfyMsg("");
+        try {
+          const res = await fetch("/dashboard/comfyui", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseUrl: document.getElementById("comfy-base-url").value,
+              defaultModel: document.getElementById("comfy-default-model").value,
+              workflows: comfyState.workflows,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "保存失败");
+          applyComfyUIData(data.data || data);
+          comfyMsg(data.message || "ComfyUI 配置已保存");
+        } catch (e) {
+          comfyMsg(e.message || "保存失败", true);
+        }
+      }
+
+      async function pingComfyUI() {
+        comfyMsg("");
+        try {
+          const res = await fetch("/dashboard/comfyui/ping", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseUrl: document.getElementById("comfy-base-url").value,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "连通失败");
+          comfyMsg(data.message || "已连通");
+        } catch (e) {
+          comfyMsg(e.message || "连通失败", true);
+        }
+      }
+
+      async function importComfyUIApi() {
+        comfyMsg("");
+        try {
+          let workflowJson = document.getElementById("comfy-import-json").value.trim();
+          const fileInput = document.getElementById("comfy-import-file");
+          if (!workflowJson && fileInput?.files?.[0]) {
+            workflowJson = await fileInput.files[0].text();
+          }
+          if (!workflowJson) throw new Error("请粘贴 JSON 或选择文件");
+          const res = await fetch("/dashboard/comfyui/import-api", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              workflowJson,
+              title: document.getElementById("comfy-import-title").value.trim(),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "导入失败");
+          applyComfyUIData(data.data || data);
+          comfyMsg(data.message || "导入成功");
+          document.getElementById("comfy-import-json").value = "";
+          if (fileInput) fileInput.value = "";
+        } catch (e) {
+          comfyMsg(e.message || "导入失败", true);
+        }
+      }
+
+      async function toggleComfyEnabled(index, enabled) {
+        if (!comfyState.workflows[index]) return;
+        comfyState.workflows[index] = {
+          ...comfyState.workflows[index],
+          enabled,
+        };
+        try {
+          await persistComfyWorkflows();
+        } catch (e) {
+          comfyMsg(e.message || "更新失败", true);
+        }
+      }
+
+      async function setComfyDecode(index, checked) {
+        if (!comfyState.workflows[index]) return;
+        comfyState.workflows[index] = {
+          ...comfyState.workflows[index],
+          decode: checked,
+        };
+        try {
+          await persistComfyWorkflows();
+        } catch (e) {
+          comfyMsg(e.message || "更新失败", true);
+        }
+      }
+
+      async function deleteComfyWorkflow(index) {
+        if (!confirm("确定删除该工作流？")) return;
+        comfyState.workflows.splice(index, 1);
+        try {
+          await persistComfyWorkflows();
+          comfyMsg("已删除");
+        } catch (e) {
+          comfyMsg(e.message || "删除失败", true);
+        }
+      }
+
+      async function reanalyzeComfy(index) {
+        const entry = comfyState.workflows[index];
+        if (!entry) return;
+        comfyMsg("");
+        try {
+          const res = await fetch("/dashboard/comfyui/analyze", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: entry.id }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "分析失败");
+          applyComfyUIData(data.data || data);
+          comfyMsg(data.message || "分析完成");
+        } catch (e) {
+          comfyMsg(e.message || "分析失败", true);
+        }
+      }
+
+      function buildComfyApiExample(entry) {
+        const model = comfyModelId(entry);
+        const base = window.location.origin;
+        const imageCount = Number(
+          entry.openaiMapping?.images?.length || entry.analysis?.imageCount || 0
+        );
+        const videoCount = Number(
+          entry.openaiMapping?.videos?.length || entry.analysis?.videoCount || 0
+        );
+        const audioCount = Number(
+          entry.openaiMapping?.audios?.length || entry.analysis?.audioCount || 0
+        );
+        const promptCount = Number(
+          entry.openaiMapping?.prompt?.length || entry.analysis?.promptCount || 0
+        );
+        const body = {
+          model,
+          prompt:
+            promptCount > 0
+              ? "subject_definitions:\\n<Subject 1> is ...\\n\\nsummary:\\n[reference generation] ..."
+              : "placeholder",
+          n: 1,
+          response_format: "url",
+        };
+        if (imageCount > 0) {
+          body.images = Array.from(
+            { length: Math.min(imageCount, 2) },
+            (_, i) => `https://example.com/picture-${i + 1}.png`
+          );
+        }
+        if (videoCount > 0) {
+          body.videos = Array.from(
+            { length: Math.min(videoCount, 1) },
+            (_, i) => `https://example.com/video-${i + 1}.mp4`
+          );
+        }
+        if (audioCount > 0) {
+          body.audios = Array.from(
+            { length: Math.min(audioCount, 1) },
+            (_, i) => `https://example.com/audio-${i + 1}.wav`
+          );
+        }
+        const bodyText = JSON.stringify(body, null, 2);
+        const curl = [
+          `curl -X POST "${base}/v1/images/generations" \\`,
+          `  -H "Content-Type: application/json" \\`,
+          `  -d '${bodyText.replace(/'/g, "'\\''")}'`,
+        ].join("\n");
+        const multipartHint =
+          imageCount + videoCount + audioCount > 0
+            ? [
+                "",
+                "# MiniMax H3 多参考：multipart 按类型分字段（顺序对应 Picture/Video/Audio）",
+                `curl -X POST "${base}/v1/images/generations" \\`,
+                `  -F "model=${model}" \\`,
+                `  -F "prompt=@./h3-prompt.txt" \\`,
+                `  -F "response_format=url" \\`,
+                imageCount > 0 ? `  -F "image=@./picture-1.png" \\` : null,
+                imageCount > 1 ? `  -F "image=@./picture-2.png" \\` : null,
+                videoCount > 0 ? `  -F "video=@./ref.mp4" \\` : null,
+                audioCount > 0 ? `  -F "audio=@./ref.wav"` : `  -F "n=1"`,
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : "";
+        const fetchCode = [
+          `const res = await fetch("${base}/v1/images/generations", {`,
+          `  method: "POST",`,
+          `  headers: { "Content-Type": "application/json" },`,
+          `  body: JSON.stringify(${bodyText.replace(/\n/g, "\n  ")}),`,
+          `});`,
+          `const json = await res.json();`,
+          `console.log(json.data[0].url); // H3 双采可能返回多个 mp4`,
+        ].join("\n");
+        return {
+          title: entry.title || model,
+          model,
+          meta:
+            "OpenAI Images 兼容（generations）。H3 多参考：images→图槽、videos→视频槽、audios→音频槽；未传的槽保留工作流原值。" +
+            ` 字段 ${entry.analysis?.fieldCount || 0} · 图 ${imageCount} · 视频 ${videoCount} · 音频 ${audioCount} · 提示词 ${promptCount}。`,
+          curl: curl + multipartHint,
+          json: bodyText,
+          fetch: fetchCode,
+        };
+      }
+
+      function showComfyApiExampleFromEntry(entry) {
+        if (!entry || !entry.analysis) {
+          alert("请先分析该条目，再查看 API 示例");
+          return;
+        }
+        const example = buildComfyApiExample(entry);
+        rhApiExampleCache = {
+          curl: example.curl,
+          json: example.json,
+          fetch: example.fetch,
+          active: "curl",
+        };
+        document.getElementById("rh-api-modal-title").textContent =
+          "API 示例 · " + example.title;
+        document.getElementById("rh-api-modal-meta").textContent = example.meta;
+        document
+          .querySelectorAll("#rh-api-modal .api-example-tabs button")
+          .forEach((btn) => {
+            btn.classList.toggle("active", btn.dataset.apiTab === "curl");
+          });
+        document.getElementById("rh-api-modal-code").textContent = example.curl;
+        document.getElementById("rh-api-modal").classList.add("active");
+      }
+
+      function showComfyApiExample(index) {
+        const entry = comfyState.workflows[index];
+        if (!entry) return;
+        showComfyApiExampleFromEntry(entry);
+      }
+
+      function openComfyEditor(index) {
+        const entry = comfyState.workflows[index];
+        if (!entry) return;
+        if (!(entry.fields || []).length) {
+          alert("请先重新分析以拉取完整字段，再编辑节点");
+          return;
+        }
+        // 复用 RunningHub 节点编辑器 UI；backend=comfy 时隐藏计费/实例
+        rhEditor = {
+          kind: "comfy",
+          index,
+          backend: "comfy",
+          entry: JSON.parse(
+            JSON.stringify({
+              ...entry,
+              rhParams: { ...(entry.comfyParams || {}) },
+              rhRandom: {},
+              rhEmptyImage: {},
+            })
+          ),
+        };
+        const rawMapping = rhEditor.entry.openaiMapping;
+        rhEditor.explicitMappingKeys = {
+          prompt: !!(rawMapping && "prompt" in rawMapping),
+          images: !!(rawMapping && "images" in rawMapping),
+          videos: !!(rawMapping && "videos" in rawMapping),
+          audios: !!(rawMapping && "audios" in rawMapping),
+          size: !!(rawMapping && "size" in rawMapping),
+          quality: !!(rawMapping && "quality" in rawMapping),
+        };
+        rhEditor.entry.openaiMapping = resolveRhOpenAIMapping(
+          rhEditor.entry.fields,
+          rhEditor.entry.openaiMapping
+        );
+        document.getElementById("rh-editor-title").textContent =
+          entry.title || "节点编辑";
+        document.getElementById("rh-editor-model").textContent = comfyModelId(entry);
+        document.getElementById("rh-editor-meta").textContent =
+          "左栏映射 prompt / images / videos / audios → Comfy 节点（H3 按 ref 顺序）；右栏改默认值。未传媒体的槽保留工作流原值。";
+        document.getElementById("rh-editor-error").textContent = "";
+        renderRhEditorForm();
+        document.getElementById("rh-editor-modal").classList.add("active");
+      }
+
+      document.getElementById("comfy-import-file")?.addEventListener("change", async (ev) => {
+        const file = ev.target.files?.[0];
+        if (!file) return;
+        try {
+          document.getElementById("comfy-import-json").value = await file.text();
+          if (!document.getElementById("comfy-import-title").value) {
+            document.getElementById("comfy-import-title").value = file.name.replace(
+              /\.json$/i,
+              ""
+            );
+          }
+        } catch {}
+      });
+
       // —— 接口测试 ——
       const TEST_LS = "imgtest:v1";
-      let testEndpoint = "generations";
+      const JIMENG_VIDEO_MODELS = [
+        "jimeng-video-seedance-2.0-mini",
+        "jimeng-video-seedance-2.0-fast",
+        "jimeng-video-seedance-2.0-pro",
+        "jimeng-video-seedance-1.5-pro",
+        "jimeng-video-3.0-pro",
+        "jimeng-video-3.0",
+        "jimeng-video-3.0-fast",
+        "jimeng-video-s2.0",
+        "jimeng-video-2.0-pro",
+      ];
+      let testEndpoint = "images/generations";
       let testInited = false;
       /** @type {{ file: File, url: string }[]} */
       let testImageItems = [];
+
+      function isTestVideoMode() {
+        return String(testEndpoint || "").startsWith("videos/");
+      }
 
       function loadTestLS() {
         try {
@@ -2659,23 +3453,131 @@
       }
 
       async function loadTestTab() {
-        if (!rhState.rhApps.length && !rhState.rhWorkflows.length) {
-          await loadRunningHubConfig();
-        }
+        // 每次进入都刷新两侧目录，避免 Comfy/RH 刚导入后测试页模型列表过期
+        await Promise.all([loadRunningHubConfig(), loadComfyUIConfig()]);
         populateTestModels();
-        if (testInited) return;
+        if (testInited) {
+          updateTestImagesHintForModel();
+          return;
+        }
         testInited = true;
         const saved = loadTestLS();
         if (saved.apiKey) document.getElementById("test-api-key").value = saved.apiKey;
         if (saved.prompt) document.getElementById("test-prompt").value = saved.prompt;
+        if (saved.ratio) document.getElementById("test-ratio").value = saved.ratio;
+        if (saved.resolution) document.getElementById("test-resolution").value = saved.resolution;
+        if (saved.duration) document.getElementById("test-duration").value = String(saved.duration);
         document.querySelectorAll("#test-endpoint button").forEach((b) => {
           b.addEventListener("click", () => setTestEndpoint(b.dataset.ep));
         });
         document.getElementById("test-images").addEventListener("change", onTestImagesPicked);
         const clearBtn = document.getElementById("test-images-clear");
         if (clearBtn) clearBtn.addEventListener("click", clearTestImages);
-        setTestEndpoint(testEndpoint);
+        document.getElementById("test-model")?.addEventListener("change", () => {
+          saveTestLS({ model: document.getElementById("test-model").value });
+          updateTestImagesHintForModel();
+        });
+        document.getElementById("test-model-custom")?.addEventListener("input", updateTestImagesHintForModel);
+        setTestEndpoint(saved.endpoint || testEndpoint);
         renderTestFiles();
+        updateTestImagesHintForModel();
+      }
+
+      function resolveTestModelId() {
+        return (
+          document.getElementById("test-model-custom")?.value.trim() ||
+          document.getElementById("test-model")?.value.trim() ||
+          ""
+        );
+      }
+
+      function resolveTestModelEntry(model) {
+        if (!model) return null;
+        if (model.startsWith("comfy:")) {
+          const id = model.slice("comfy:".length);
+          return (comfyState.workflows || []).find((e) => String(e.id) === id) || null;
+        }
+        if (model.startsWith("app:")) {
+          const id = model.slice("app:".length);
+          return (rhState.rhApps || []).find((e) => String(e.appId || e.id) === id) || null;
+        }
+        if (model.startsWith("workflow:")) {
+          const id = model.slice("workflow:".length);
+          return (rhState.rhWorkflows || []).find((e) => String(e.workflowId || e.id) === id) || null;
+        }
+        return null;
+      }
+
+      function testModelMediaSlots(model) {
+        const entry = resolveTestModelEntry(model);
+        if (!entry) return null;
+        const images = Math.max(
+          Array.isArray(entry.openaiMapping?.images)
+            ? entry.openaiMapping.images.filter(Boolean).length
+            : 0,
+          Number(entry.analysis?.imageCount || 0)
+        );
+        const videos = Math.max(
+          Array.isArray(entry.openaiMapping?.videos)
+            ? entry.openaiMapping.videos.filter(Boolean).length
+            : 0,
+          Number(entry.analysis?.videoCount || 0)
+        );
+        const audios = Math.max(
+          Array.isArray(entry.openaiMapping?.audios)
+            ? entry.openaiMapping.audios.filter(Boolean).length
+            : 0,
+          Number(entry.analysis?.audioCount || 0)
+        );
+        return { images, videos, audios, total: images + videos + audios };
+      }
+
+      function testModelImageSlots(model) {
+        const slots = testModelMediaSlots(model);
+        return slots ? slots.images : null;
+      }
+
+      function classifyTestMediaFiles(files) {
+        const images = [];
+        const videos = [];
+        const audios = [];
+        for (const f of files) {
+          const mime = String(f.type || "").toLowerCase();
+          const name = String(f.name || "").toLowerCase();
+          if (mime.startsWith("video/") || /\.(mp4|webm|mov|m4v|mkv)$/i.test(name)) {
+            videos.push(f);
+          } else if (mime.startsWith("audio/") || /\.(wav|mp3|flac|ogg|m4a)$/i.test(name)) {
+            audios.push(f);
+          } else {
+            images.push(f);
+          }
+        }
+        return { images, videos, audios };
+      }
+
+      function updateTestImagesHintForModel() {
+        const hint = document.getElementById("test-images-hint");
+        if (!hint) return;
+        const model = resolveTestModelId();
+        const selected = testImageItems.length;
+        if (isTestVideoMode()) {
+          hint.textContent = selected
+            ? `已选 ${selected} 张首尾帧参考图（即梦视频：按顺序作为图生视频输入）`
+            : "视频可选上传首/尾帧参考图；无图则纯文生视频。即梦视频需填写 session API Key。";
+          return;
+        }
+        const slots = testModelMediaSlots(model);
+        const classified = classifyTestMediaFiles(testImageItems.map((x) => x.file));
+        let base = selected
+          ? `已选 ${selected} 个文件（图 ${classified.images.length} / 视频 ${classified.videos.length} / 音频 ${classified.audios.length}）`
+          : "可多选图/视频/音频；按类型分别写入 image / video / audio 字段。";
+        if (model && slots) {
+          base += ` · 模型槽位 图${slots.images}/视${slots.videos}/音${slots.audios}`;
+          if (selected > 0 && slots.total === 0) {
+            base += "（未映射媒体槽，上传会被忽略）";
+          }
+        }
+        hint.textContent = base;
       }
 
       function populateTestModels() {
@@ -2683,26 +3585,58 @@
         if (!select) return;
         const prev = select.value;
         const opts = [];
-        const push = (kind, list) => {
-          list
+        if (isTestVideoMode()) {
+          JIMENG_VIDEO_MODELS.forEach((id) => {
+            opts.push(`<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`);
+          });
+          // Comfy/RH 视频工作流仍走 /v1/images/*，结果里可播 mp4；此处一并列出便于切换回图片接口测
+          (comfyState.workflows || [])
             .filter((e) => e.enabled !== false)
             .forEach((e) => {
-              const id = rhModelId(kind, e);
+              const id = `comfy:${e.id}`;
+              opts.push(
+                `<option value="${escapeHtml(id)}">${escapeHtml(
+                  "[Comfy 视频工作流请改用 images] " + (e.title || id)
+                )}</option>`
+              );
+            });
+        } else {
+          const push = (kind, list) => {
+            list
+              .filter((e) => e.enabled !== false)
+              .forEach((e) => {
+                const id = rhModelId(kind, e);
+                opts.push(
+                  `<option value="${escapeHtml(id)}">${escapeHtml(
+                    (e.title || id) + " · " + id
+                  )}</option>`
+                );
+              });
+          };
+          push("app", rhState.rhApps);
+          push("workflow", rhState.rhWorkflows);
+          (comfyState.workflows || [])
+            .filter((e) => e.enabled !== false)
+            .forEach((e) => {
+              const id = `comfy:${e.id}`;
               opts.push(
                 `<option value="${escapeHtml(id)}">${escapeHtml(
                   (e.title || id) + " · " + id
                 )}</option>`
               );
             });
-        };
-        push("app", rhState.rhApps);
-        push("workflow", rhState.rhWorkflows);
+        }
         if (!opts.length) {
-          select.innerHTML = `<option value="">（无已启用的 RH 模型，可在下方手填 model）</option>`;
+          select.innerHTML = `<option value="">（无已启用模型，可在下方手填 model）</option>`;
         } else {
           select.innerHTML = opts.join("");
           const saved = loadTestLS().model;
-          const want = prev || saved || rhState.defaultModel;
+          const want =
+            prev ||
+            saved ||
+            (isTestVideoMode()
+              ? JIMENG_VIDEO_MODELS[0]
+              : rhState.defaultModel || comfyState.defaultModel);
           if (want && [...select.options].some((o) => o.value === want)) {
             select.value = want;
           }
@@ -2710,14 +3644,33 @@
       }
 
       function setTestEndpoint(ep) {
-        testEndpoint = ep;
+        testEndpoint = ep || "images/generations";
         document.querySelectorAll("#test-endpoint button").forEach((b) => {
-          b.classList.toggle("active", b.dataset.ep === ep);
+          b.classList.toggle("active", b.dataset.ep === testEndpoint);
         });
-        document.getElementById("test-images-label").textContent =
-          ep === "edits"
-            ? "参考图 image（必填，可多次添加）"
-            : "参考图 image（可选参考，可多次添加）";
+        const video = isTestVideoMode();
+        const img1 = document.getElementById("test-image-params");
+        const img2 = document.getElementById("test-image-params2");
+        const vid1 = document.getElementById("test-video-params");
+        const vid2 = document.getElementById("test-video-params2");
+        const vidHint = document.getElementById("test-video-api-hint");
+        if (img1) img1.hidden = video;
+        if (img2) img2.hidden = video;
+        if (vid1) vid1.hidden = !video;
+        if (vid2) vid2.hidden = !video;
+        if (vidHint) vidHint.hidden = !video;
+        const fileInput = document.getElementById("test-images");
+        if (fileInput) {
+          fileInput.accept = video ? "image/*" : "image/*,video/*,audio/*";
+        }
+        document.getElementById("test-images-label").textContent = video
+          ? "首尾帧参考图（可选，可多张，按顺序 → file_paths / image）"
+          : testEndpoint === "images/edits"
+            ? "参考媒体（必填，图/视频/音频）"
+            : "参考媒体（图/视频/音频，可选，H3 多参考）";
+        saveTestLS({ endpoint: testEndpoint });
+        populateTestModels();
+        updateTestImagesHintForModel();
       }
 
       function onTestImagesPicked(e) {
@@ -2753,7 +3706,6 @@
 
       function renderTestFiles() {
         const wrap = document.getElementById("test-files");
-        const hint = document.getElementById("test-images-hint");
         const clearBtn = document.getElementById("test-images-clear");
         if (!wrap) return;
         wrap.innerHTML = "";
@@ -2768,28 +3720,63 @@
           btn.addEventListener("click", () => removeTestImage(Number(btn.getAttribute("data-del"))));
         });
         if (clearBtn) clearBtn.hidden = testImageItems.length === 0;
-        if (hint) {
-          hint.textContent = testImageItems.length
-            ? `已选 ${testImageItems.length} 张（可继续点上方选择追加），顺序 images[0]…images[${testImageItems.length - 1}]`
-            : "可多次点选追加；缩略图右上角删除单张。顺序对应 images[0]、images[1]…";
-        }
+        updateTestImagesHintForModel();
       }
 
-      async function runImageTest() {
+      function isProbablyVideoUrl(url) {
+        if (!url) return false;
+        if (/^data:video\//i.test(url)) return true;
+        if (/\.(mp4|webm|mov|m4v|mkv)(\?|#|$)/i.test(url)) return true;
+        // ComfyUI /view 输出常不带扩展名；filename 参数里可能带
+        if (/[?&]filename=[^&]*\.(mp4|webm|mov|m4v|mkv)/i.test(url)) return true;
+        return false;
+      }
+
+      function mediaSrcFromItem(it, preferVideo) {
+        if (!it) return "";
+        if (it.url) return it.url;
+        if (!it.b64_json) return "";
+        const raw = String(it.b64_json);
+        if (raw.startsWith("data:")) return raw;
+        const mime = preferVideo || isTestVideoMode() ? "video/mp4" : "image/png";
+        return `data:${mime};base64,${raw}`;
+      }
+
+      function renderTestMediaGrid(urls) {
+        if (!urls.length) {
+          return `<div class="test-placeholder">响应里没有媒体数据</div>`;
+        }
+        return `<div class="test-result-grid">${urls
+          .map((u, i) => {
+            const video = isProbablyVideoUrl(u) || isTestVideoMode();
+            const decoded = u.startsWith("data:");
+            const media = video
+              ? `<video src="${escapeHtml(u)}" controls playsinline preload="metadata"></video>`
+              : `<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(
+                  u
+                )}" loading="lazy" /></a>`;
+            return `<div class="test-result-item">
+                <span class="test-tag ${decoded ? "ok" : ""}">${
+                  video ? (decoded ? "视频·已解码" : "视频") : decoded ? "已解码" : "远程"
+                }</span>
+                ${media}
+                <button type="button" class="test-dl" data-test-dl="${i}" data-test-kind="${
+                  video ? "video" : "image"
+                }">下载</button>
+              </div>`;
+          })
+          .join("")}</div>`;
+      }
+
+      async function runMediaTest() {
         const statusEl = document.getElementById("test-status");
         const resultEl = document.getElementById("test-result");
         const btn = document.getElementById("test-send");
-        const model =
-          document.getElementById("test-model-custom").value.trim() ||
-          document.getElementById("test-model").value.trim();
+        const model = resolveTestModelId();
         const prompt = document.getElementById("test-prompt").value.trim();
         const apiKey = document.getElementById("test-api-key").value.trim();
-        const n = parseInt(document.getElementById("test-n").value, 10) || 1;
-        const size = document.getElementById("test-size").value;
-        const quality = document.getElementById("test-quality").value;
-        const responseFormat =
-          document.getElementById("test-response-format").value || "url";
         const files = testImageItems.map((item) => item.file);
+        const videoMode = isTestVideoMode();
 
         if (!model) {
           statusEl.className = "test-status err";
@@ -2801,48 +3788,140 @@
           statusEl.textContent = "请填写 prompt";
           return;
         }
-        if (testEndpoint === "edits" && !files.length) {
+        if (testEndpoint === "images/edits" && !files.length) {
           statusEl.className = "test-status err";
           statusEl.textContent = "edits 接口需要至少一张参考图";
           return;
         }
+        const isComfy = model.startsWith("comfy:");
+        const isRh = model.startsWith("app:") || model.startsWith("workflow:");
+        // 即梦视频才要 session；Comfy 本地 / RH 管理台 Key 均可留空
+        if (videoMode && !apiKey && !isComfy && !isRh) {
+          statusEl.className = "test-status err";
+          statusEl.textContent = "即梦视频需要填写 API Key（sessionid）";
+          return;
+        }
+        // Comfy 视频：异步 POST /v1/videos → 轮询 GET（官方：入队不等结果，避免 HTTP 超时）
+        const useComfyAsyncVideo = videoMode && isComfy;
+        const useRhVideoPath = videoMode && isRh;
+        const effectiveEndpoint = useComfyAsyncVideo
+          ? "videos"
+          : useRhVideoPath
+            ? "images/generations"
+            : testEndpoint;
+        const effectiveVideoMode = videoMode && !useComfyAsyncVideo && !useRhVideoPath;
 
-        saveTestLS({ apiKey, prompt, model });
+        if (!effectiveVideoMode && !useComfyAsyncVideo) {
+          const slots = testModelMediaSlots(model);
+          if (files.length && slots && slots.total === 0) {
+            const ok = confirm(
+              "当前模型未绑定媒体槽位。继续发送的话，上传文件会被服务端忽略。\n\nH3 工作流请先导入并重新分析；或到「编辑节点」绑定 images/videos/audios。\n\n仍要继续？"
+            );
+            if (!ok) return;
+          }
+        }
+
+        const ratio = document.getElementById("test-ratio")?.value || "16:9";
+        const resolution = document.getElementById("test-resolution")?.value || "720p";
+        const duration = parseInt(document.getElementById("test-duration")?.value || "10", 10) || 10;
+        const n = parseInt(document.getElementById("test-n").value, 10) || 1;
+        const size = document.getElementById("test-size").value;
+        const quality = document.getElementById("test-quality").value;
+        const responseFormat =
+          videoMode || useComfyAsyncVideo || useRhVideoPath
+            ? document.getElementById("test-video-response-format")?.value ||
+              document.getElementById("test-response-format")?.value ||
+              "url"
+            : document.getElementById("test-response-format").value || "url";
+
+        saveTestLS({ apiKey, prompt, model, endpoint: testEndpoint, ratio, resolution, duration });
 
         const headers = {};
         if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
+        // Comfy 视频几何参数：duration / ratio / resolution（H3 节点）
+        const wantGeometry =
+          effectiveVideoMode || useComfyAsyncVideo || useRhVideoPath || isComfy;
         let bodyInit;
         if (files.length) {
           const fd = new FormData();
           fd.append("model", model);
           fd.append("prompt", prompt);
-          fd.append("n", String(n));
-          if (size) fd.append("size", size);
-          if (quality) fd.append("quality", quality);
           fd.append("response_format", responseFormat);
-          // 每张图都用 image 字段提交；后端 formidable multiples 会收成数组
-          [...files].forEach((f) => fd.append("image", f));
+          if (effectiveVideoMode || useComfyAsyncVideo) {
+            fd.append("ratio", ratio);
+            fd.append("resolution", resolution);
+            fd.append("duration", String(duration));
+            if (useComfyAsyncVideo) {
+              const classified = classifyTestMediaFiles(files);
+              classified.images.forEach((f) => fd.append("image", f, f.name || "image.png"));
+              classified.videos.forEach((f) => fd.append("video", f, f.name || "video.mp4"));
+              classified.audios.forEach((f) => fd.append("audio", f, f.name || "audio.wav"));
+            } else {
+              files.forEach((f) => fd.append("image", f, f.name || "frame.png"));
+            }
+          } else {
+            fd.append("n", String(n));
+            if (size) fd.append("size", size);
+            if (quality) fd.append("quality", quality);
+            if (wantGeometry) {
+              fd.append("ratio", ratio);
+              fd.append("resolution", resolution);
+              fd.append("duration", String(duration));
+            }
+            const classified = classifyTestMediaFiles(files);
+            classified.images.forEach((f) => fd.append("image", f, f.name || "image.png"));
+            classified.videos.forEach((f) => fd.append("video", f, f.name || "video.mp4"));
+            classified.audios.forEach((f) => fd.append("audio", f, f.name || "audio.wav"));
+          }
           bodyInit = fd;
         } else {
           headers["Content-Type"] = "application/json";
-          const body = { model, prompt, n, response_format: responseFormat };
-          if (size) body.size = size;
-          if (quality) body.quality = quality;
-          bodyInit = JSON.stringify(body);
+          if (effectiveVideoMode || useComfyAsyncVideo) {
+            bodyInit = JSON.stringify({
+              model,
+              prompt,
+              ratio,
+              resolution,
+              duration,
+              response_format: responseFormat,
+            });
+          } else {
+            const body = { model, prompt, n, response_format: responseFormat };
+            if (size) body.size = size;
+            if (quality) body.quality = quality;
+            if (wantGeometry) {
+              body.ratio = ratio;
+              body.resolution = resolution;
+              body.duration = duration;
+            }
+            bodyInit = JSON.stringify(body);
+          }
         }
 
+        const apiPath = "/v1/" + effectiveEndpoint;
+        const backendHint = useComfyAsyncVideo
+          ? "ComfyUI 异步入队"
+          : effectiveVideoMode
+            ? "即梦视频"
+            : isComfy
+              ? "ComfyUI（无需 API Key）"
+              : isRh
+                ? "RunningHub"
+                : "即梦";
         btn.disabled = true;
         statusEl.className = "test-status pending";
-        statusEl.textContent = "请求中，RunningHub 生图通常需要数十秒，请耐心等待…";
-        resultEl.innerHTML = `<div class="test-placeholder">生成中…</div>`;
+        const mediaHint = files.length ? ` · 参考 ${files.length} 个` : "";
+        statusEl.textContent = `请求中（${backendHint} · ${apiPath}${mediaHint}）…`;
+        resultEl.innerHTML = `<div class="test-placeholder">生成中${
+          effectiveVideoMode || useComfyAsyncVideo || useRhVideoPath ? "（视频通常需要数分钟）" : ""
+        }…</div>`;
         const started = Date.now();
         try {
-          const res = await fetch("/v1/images/" + testEndpoint, {
+          const res = await fetch(apiPath, {
             method: "POST",
             headers,
             body: bodyInit,
           });
-          const elapsed = ((Date.now() - started) / 1000).toFixed(1);
           const text = await res.text();
           let json;
           try {
@@ -2851,6 +3930,7 @@
             json = null;
           }
           if (!res.ok || !json) {
+            const elapsed = ((Date.now() - started) / 1000).toFixed(1);
             statusEl.className = "test-status err";
             statusEl.textContent = `失败（HTTP ${res.status}，用时 ${elapsed}s）`;
             resultEl.innerHTML = `<pre class="api-example-pre">${escapeHtml(
@@ -2858,42 +3938,90 @@
             )}</pre>`;
             return;
           }
+
+          if (useComfyAsyncVideo && json.id) {
+            const jobId = json.id;
+            statusEl.textContent = `已入队 ${jobId}，轮询中…`;
+            resultEl.innerHTML = `<pre class="api-example-pre">${escapeHtml(
+              JSON.stringify(json, null, 2)
+            )}</pre>`;
+            let final = null;
+            for (let i = 0; i < 360; i++) {
+              await new Promise((r) => setTimeout(r, 5000));
+              const stRes = await fetch("/v1/videos/" + encodeURIComponent(jobId), { headers });
+              const stText = await stRes.text();
+              let st;
+              try {
+                st = JSON.parse(stText);
+              } catch {
+                st = null;
+              }
+              const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+              if (!stRes.ok || !st) {
+                statusEl.className = "test-status err";
+                statusEl.textContent = `轮询失败（HTTP ${stRes.status}，${elapsed}s）`;
+                resultEl.innerHTML = `<pre class="api-example-pre">${escapeHtml(stText)}</pre>`;
+                return;
+              }
+              statusEl.textContent = `生成中… ${st.status || "?"}（${elapsed}s） id=${jobId}`;
+              if (st.status === "completed" || st.status === "failed") {
+                final = st;
+                break;
+              }
+            }
+            const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+            if (!final) {
+              statusEl.className = "test-status err";
+              statusEl.textContent = `轮询超时（${elapsed}s），任务可能仍在 Comfy 队列：${jobId}`;
+              return;
+            }
+            if (final.status === "failed") {
+              statusEl.className = "test-status err";
+              statusEl.textContent = `失败（${elapsed}s）：${(final.error && final.error.message) || ""}`;
+              resultEl.innerHTML = `<pre class="api-example-pre">${escapeHtml(
+                JSON.stringify(final, null, 2)
+              )}</pre>`;
+              return;
+            }
+            const urls = final.url ? [final.url] : [];
+            statusEl.className = "test-status ok";
+            statusEl.textContent = `成功，返回 ${urls.length} 个视频，用时 ${elapsed}s`;
+            resultEl.innerHTML =
+              renderTestMediaGrid(urls) +
+              `<div class="test-raw-title">原始响应</div><pre class="api-example-pre">${escapeHtml(
+                JSON.stringify(final, null, 2)
+              )}</pre>`;
+            resultEl.querySelectorAll("[data-test-dl]").forEach((el) => {
+              el.addEventListener("click", () => {
+                const i = Number(el.getAttribute("data-test-dl"));
+                downloadTestMedia(urls[i], `video-${i + 1}.mp4`);
+              });
+            });
+            return;
+          }
+
+          const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+          const treatAsVideo = effectiveVideoMode || useRhVideoPath;
           const items = Array.isArray(json.data) ? json.data : [];
           const urls = items
-            .map((it) =>
-              it.url ? it.url : it.b64_json ? "data:image/png;base64," + it.b64_json : ""
-            )
+            .map((it) => mediaSrcFromItem(it, treatAsVideo))
             .filter(Boolean);
+          const videoCount = urls.filter((u) => isProbablyVideoUrl(u) || treatAsVideo).length;
           const decodedCount = urls.filter((u) => u.startsWith("data:")).length;
           statusEl.className = "test-status ok";
-          statusEl.textContent = `成功，返回 ${urls.length} 张图片（已解码 data URL ${decodedCount} / 远程 URL ${
-            urls.length - decodedCount
-          }），用时 ${elapsed}s`;
-          const grid = urls.length
-            ? `<div class="test-result-grid">${urls
-                .map((u, i) => {
-                  const decoded = u.startsWith("data:");
-                  return `<div class="test-result-item">
-                      <span class="test-tag ${decoded ? "ok" : ""}">${
-                    decoded ? "已解码" : "远程"
-                  }</span>
-                      <a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(
-                    u
-                  )}" loading="lazy" /></a>
-                      <button type="button" class="test-dl" data-test-dl="${i}">下载</button>
-                    </div>`;
-                })
-                .join("")}</div>`
-            : `<div class="test-placeholder">响应里没有图片数据</div>`;
+          statusEl.textContent = treatAsVideo
+            ? `成功，返回 ${urls.length} 个视频（data ${decodedCount}），用时 ${elapsed}s`
+            : `成功，返回 ${urls.length} 个结果（视频 ${videoCount} / 已解码 ${decodedCount}），用时 ${elapsed}s`;
           resultEl.innerHTML =
-            grid +
+            renderTestMediaGrid(urls) +
             `<div class="test-raw-title">原始响应</div><pre class="api-example-pre">${escapeHtml(
               JSON.stringify(json, null, 2)
             )}</pre>`;
           resultEl.querySelectorAll("[data-test-dl]").forEach((el) => {
             el.addEventListener("click", () => {
               const i = Number(el.getAttribute("data-test-dl"));
-              downloadTestImage(urls[i], `image-${i + 1}.png`);
+              const kind = el.getAttribute("data-test-kind") || "image";
+              downloadTestMedia(urls[i], kind === "video" ? `video-${i + 1}.mp4` : `image-${i + 1}.png`);
             });
           });
         } catch (e) {
@@ -2905,9 +4033,14 @@
         }
       }
 
-      // 把返回图片解码为 blob 再下载：b64_json / data: 直接解码，远程 url 先 fetch，
+      // 兼容旧 onclick
+      async function runImageTest() {
+        return runMediaTest();
+      }
+
+      // 把返回媒体解码为 blob 再下载：b64_json / data: 直接解码，远程 url 先 fetch，
       // 失败（如跨域/防盗链）则回退新窗口打开
-      async function downloadTestImage(src, name) {
+      async function downloadTestMedia(src, name) {
         if (!src) return;
         let objectUrl = "";
         try {
@@ -2925,6 +4058,9 @@
         } finally {
           if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
         }
+      }
+      async function downloadTestImage(src, name) {
+        return downloadTestMedia(src, name);
       }
 
       async function saveRunningHubConfig() {

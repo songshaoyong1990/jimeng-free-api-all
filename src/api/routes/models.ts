@@ -40,6 +40,24 @@ export default {
                         default_resolution: '',
                         source: 'runninghub',
                     });
+                    existing.add(modelId);
+                }
+
+                const comfy = db.getComfyUIConfigPublic();
+                for (const modelId of comfy.models) {
+                    if (existing.has(modelId)) continue;
+                    const entry = comfy.workflows.find((item) => `comfy:${item.id}` === modelId);
+                    data.push({
+                        id: modelId,
+                        object: 'model',
+                        owned_by: 'comfyui',
+                        description: entry?.title || 'Local ComfyUI',
+                        name: entry?.title || modelId,
+                        model_req_key: modelId,
+                        supported_resolutions: [],
+                        default_resolution: '',
+                        source: 'comfyui',
+                    });
                 }
             }
 

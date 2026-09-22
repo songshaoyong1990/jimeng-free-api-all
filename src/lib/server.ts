@@ -20,7 +20,12 @@ class Server {
     
     constructor() {
         this.app = new Koa();
-        this.app.use(koaCors());
+      this.app.use(koaCors({
+        origin: (ctx: any) => ctx.get('Origin') || '*',
+        credentials: true,
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization'],
+      }));
         // 范围请求支持
         this.app.use(koaRange);
         this.router = new KoaRouter({ prefix: config.service.urlPrefix });

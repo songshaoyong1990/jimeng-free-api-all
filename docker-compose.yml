@@ -1,0 +1,18 @@
+services:
+  jimeng-free-api:
+    build: .
+    image: jimeng-free-api-all:local
+    container_name: jimeng-free-api
+    init: true
+    restart: unless-stopped
+    ports:
+      # 绑定 0.0.0.0，允许本机与局域网访问
+      - "0.0.0.0:8001:8000"
+    environment:
+      - TZ=Asia/Shanghai
+      - NODE_ENV=production
+      - SERVER_PORT=8000
+      - DB_PATH=/app/data/jimeng.db
+    volumes:
+      # 使用本机 data，带上已导入的 ComfyUI 工作流
+      - ./data:/app/data

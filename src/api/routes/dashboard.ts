@@ -3,16 +3,30 @@ import Response from '@/lib/response/Response.ts';
 import db from '@/lib/database.ts';
 import { getCredit } from '@/api/controllers/core.ts';
 import { analyzeRunningHubEntry } from '@/api/controllers/runninghub.ts';
+import { analyzeComfyUIWorkflowApi, pingComfyUI } from '@/api/controllers/comfyui.ts';
 import {
   loadDefaultRunningHubCatalog,
   mergeRunningHubEntries,
   parseRunningHubUrl,
   slimRunningHubEntry,
 } from '@/lib/runninghub-config.ts';
+import {
+  mergeComfyUIEntries,
+} from '@/lib/comfyui-config.ts';
 import { inferOpenAIMapping, resolveOpenAIMapping } from '@/lib/openai-images-compat.ts';
+import crypto from 'crypto';
+
+function sessionCookie(sessionId: string, maxAge = 86400) {
+  // SameSite=Lax 保证刷新/跳转带上；不设 Secure 以兼容局域网 http
+  return `session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+function clearSessionCookie() {
+  return 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+}
 
 function requireSession(request: Request) {
-  const sessionId = request.headers.cookie?.match(/session=([^;]+)/)?.[1];
+  const sessionId = request.headers.cookie?.match(/(?:^|;\s*)session=([^;]+)/)?.[1];
   if (!sessionId || !db.validateSession(sessionId)) {
     return null;
   }
@@ -134,7 +148,14 @@ export default {
         return new Response({ error: '未登录' }, { statusCode: 401 });
       }
       return db.getRunningHubConfigPublic();
-    }
+    },
+
+    '/comfyui': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      return db.getComfyUIConfigPublic();
+    },
   },
 
   post: {
@@ -164,13 +185,13 @@ export default {
         { success: true },
         { 
           statusCode: 200,
-          headers: { 'Set-Cookie': `session=${sessionId}; Path=/; HttpOnly; Max-Age=86400` }
+          headers: { 'Set-Cookie': sessionCookie(sessionId) }
         }
       );
     },
 
     '/logout': async (request: Request) => {
-      const sessionId = request.headers.cookie?.match(/session=([^;]+)/)?.[1];
+      const sessionId = request.headers.cookie?.match(/(?:^|;\s*)session=([^;]+)/)?.[1];
       if (sessionId) {
         db.deleteSession(sessionId);
       }
@@ -178,13 +199,13 @@ export default {
         { success: true },
         { 
           statusCode: 200,
-          headers: { 'Set-Cookie': 'session=; Path=/; HttpOnly; Max-Age=0' }
+          headers: { 'Set-Cookie': clearSessionCookie() }
         }
       );
     },
 
     '/password': async (request: Request) => {
-      const sessionId = request.headers.cookie?.match(/session=([^;]+)/)?.[1];
+      const sessionId = request.headers.cookie?.match(/(?:^|;\s*)session=([^;]+)/)?.[1];
       const userId = sessionId ? db.validateSession(sessionId) : null;
       if (!userId) {
         return new Response({ error: '未登录' }, { statusCode: 401 });
@@ -312,6 +333,115 @@ export default {
         const statusCode = e?.statusCode || (String(msg).includes('API Key') ? 400 : 502);
         return new Response({ error: msg }, { statusCode });
       }
+    },
+
+    '/comfyui': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      const body = request.body || {};
+      const data = db.saveComfyUIConfig({
+        baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+        defaultModel: typeof body.defaultModel === 'string' ? body.defaultModel : undefined,
+        workflows: Array.isArray(body.workflows) ? body.workflows : undefined,
+      });
+      return { success: true, message: 'ComfyUI 配置已保存', data };
+    },
+
+    '/comfyui/import-api': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      const body = request.body || {};
+      let workflowApi = body.workflowApi;
+      if (typeof body.workflowJson === 'string' && body.workflowJson.trim()) {
+        try {
+          workflowApi = JSON.parse(body.workflowJson);
+        } catch {
+          return new Response({ error: 'workflowJson 不是合法 JSON' }, { statusCode: 400 });
+        }
+      }
+      if (!workflowApi || typeof workflowApi !== 'object' || Array.isArray(workflowApi)) {
+        return new Response(
+          { error: '请粘贴 ComfyUI「另存为 API」的 JSON（对象，键为节点 id）' },
+          { statusCode: 400 }
+        );
+      }
+      try {
+        const title = typeof body.title === 'string' ? body.title.trim() : '';
+        const id =
+          (typeof body.id === 'string' && body.id.trim()) ||
+          `wf_${crypto.createHash('md5').update(JSON.stringify(Object.keys(workflowApi).sort())).digest('hex').slice(0, 10)}`;
+        const entry = analyzeComfyUIWorkflowApi(workflowApi, { id, title });
+        const current = db.getComfyUIConfig();
+        const prev = current.workflows.find((item) => item.id === entry.id);
+        if (prev && prev.enabled === false) entry.enabled = false;
+        if (prev?.comfyParams) {
+          entry.comfyParams = { ...entry.comfyParams, ...prev.comfyParams };
+        }
+        if (prev?.openaiMapping) {
+          entry.openaiMapping = prev.openaiMapping;
+        }
+        const data = db.saveComfyUIConfig({
+          workflows: mergeComfyUIEntries(current.workflows, [entry]),
+        });
+        return {
+          success: true,
+          message: `已导入并分析：${entry.title}（节点 ${entry.analysis?.nodeCount || 0}，字段 ${entry.analysis?.fieldCount || 0}，图 ${entry.analysis?.imageCount || 0}，提示词 ${entry.analysis?.promptCount || 0}）`,
+          entryId: entry.id,
+          data,
+        };
+      } catch (e: any) {
+        const msg = e?.errmsg || e?.message || '导入失败';
+        return new Response({ error: msg }, { statusCode: e?.statusCode || 400 });
+      }
+    },
+
+    '/comfyui/ping': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      const baseUrl =
+        typeof request.body?.baseUrl === 'string' && request.body.baseUrl.trim()
+          ? request.body.baseUrl.trim()
+          : db.getComfyUIConfig().baseUrl;
+      try {
+        const result = await pingComfyUI(baseUrl);
+        return { success: true, message: `已连通 ${result.baseUrl}`, data: result };
+      } catch (e: any) {
+        return new Response(
+          { error: `无法连接 ComfyUI（${baseUrl}）: ${e?.message || e}` },
+          { statusCode: 502 }
+        );
+      }
+    },
+
+    '/comfyui/analyze': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      const id = String(request.body?.id || '').trim();
+      if (!id) {
+        return new Response({ error: '缺少 id' }, { statusCode: 400 });
+      }
+      const current = db.getComfyUIConfig();
+      const prev = current.workflows.find((item) => item.id === id);
+      if (!prev?.workflowApi) {
+        return new Response({ error: '条目不存在或缺少 workflowApi' }, { statusCode: 404 });
+      }
+      const entry = analyzeComfyUIWorkflowApi(prev.workflowApi, { id: prev.id, title: prev.title });
+      entry.enabled = prev.enabled !== false;
+      entry.comfyParams = { ...entry.comfyParams, ...prev.comfyParams };
+      entry.openaiMapping = prev.openaiMapping || entry.openaiMapping;
+      const data = db.saveComfyUIConfig({
+        workflows: mergeComfyUIEntries(current.workflows, [entry]),
+      });
+      return {
+        success: true,
+        message: `已重新分析：字段 ${entry.analysis?.fieldCount || 0}，图 ${entry.analysis?.imageCount || 0}`,
+        entryId: entry.id,
+        data,
+      };
     },
   },
 

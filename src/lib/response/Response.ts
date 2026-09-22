@@ -46,10 +46,21 @@ export default class Response {
         this.redirect && ctx.redirect(this.redirect);
         this.statusCode && (ctx.status = this.statusCode);
         this.type && (ctx.type = mime.getType(this.type) || this.type);
-        const headers = this.headers || {};
-        if(this.size && !headers["Content-Length"] && !headers["content-length"])
+        const headers = { ...(this.headers || {}) };
+        // Set-Cookie 必须用 append，ctx.set 在部分环境下会丢弃或覆盖
+        const rawCookie = headers["Set-Cookie"] ?? headers["set-cookie"];
+        delete headers["Set-Cookie"];
+        delete headers["set-cookie"];
+        if (this.size && !headers["Content-Length"] && !headers["content-length"])
             headers["Content-Length"] = this.size;
         ctx.set(headers);
+        if (rawCookie != null) {
+            const list = Array.isArray(rawCookie) ? rawCookie : [rawCookie];
+            for (const item of list) {
+                if (item == null || item === "") continue;
+                ctx.append("Set-Cookie", String(item));
+            }
+        }
         if(Body.isInstance(this.body))
             ctx.body = this.body.toObject();
         else

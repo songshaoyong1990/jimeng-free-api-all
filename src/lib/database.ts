@@ -8,6 +8,13 @@ import {
   type RunningHubEntry,
   type RunningHubStoredConfig,
 } from './runninghub-config.ts';
+import {
+  COMFYUI_DEFAULT_BASE_URL,
+  comfyUIModelOptions,
+  normalizeComfyUIEntries,
+  type ComfyUIEntry,
+  type ComfyUIStoredConfig,
+} from './comfyui-config.ts';
 
 // 数据库文件路径
 const DB_PATH = process.env.DB_PATH || './data/jimeng.db';
@@ -91,6 +98,12 @@ const RH_SETTING_KEYS = {
   defaultModel: 'runninghub.defaultModel',
   rhApps: 'runninghub.rhApps',
   rhWorkflows: 'runninghub.rhWorkflows',
+} as const;
+
+const COMFY_SETTING_KEYS = {
+  baseUrl: 'comfyui.baseUrl',
+  defaultModel: 'comfyui.defaultModel',
+  workflows: 'comfyui.workflows',
 } as const;
 
 export type RunningHubConfig = RunningHubStoredConfig;
@@ -370,6 +383,53 @@ export function saveRunningHubConfig(input: {
   return getRunningHubConfigPublic();
 }
 
+// ==================== ComfyUI 本地配置 ====================
+
+export type ComfyUIConfig = ComfyUIStoredConfig;
+
+export type ComfyUIConfigPublic = {
+  baseUrl: string;
+  defaultModel: string;
+  workflows: ComfyUIEntry[];
+  models: string[];
+};
+
+export function getComfyUIConfig(): ComfyUIConfig {
+  return {
+    baseUrl: getSetting(COMFY_SETTING_KEYS.baseUrl) || COMFYUI_DEFAULT_BASE_URL,
+    defaultModel: getSetting(COMFY_SETTING_KEYS.defaultModel),
+    workflows: normalizeComfyUIEntries(parseJsonSetting<any[]>(COMFY_SETTING_KEYS.workflows, [])),
+  };
+}
+
+export function getComfyUIConfigPublic(): ComfyUIConfigPublic {
+  const config = getComfyUIConfig();
+  return {
+    baseUrl: config.baseUrl,
+    defaultModel: config.defaultModel,
+    workflows: config.workflows,
+    models: comfyUIModelOptions(config),
+  };
+}
+
+export function saveComfyUIConfig(input: {
+  baseUrl?: string;
+  defaultModel?: string;
+  workflows?: ComfyUIEntry[];
+}): ComfyUIConfigPublic {
+  if (typeof input.baseUrl === 'string') {
+    const baseUrl = input.baseUrl.trim().replace(/\/+$/, '') || COMFYUI_DEFAULT_BASE_URL;
+    setSetting(COMFY_SETTING_KEYS.baseUrl, baseUrl);
+  }
+  if (typeof input.defaultModel === 'string') {
+    setSetting(COMFY_SETTING_KEYS.defaultModel, input.defaultModel.trim());
+  }
+  if (Array.isArray(input.workflows)) {
+    setSetting(COMFY_SETTING_KEYS.workflows, JSON.stringify(normalizeComfyUIEntries(input.workflows)));
+  }
+  return getComfyUIConfigPublic();
+}
+
 export default {
   isSetupComplete,
   createUser,
@@ -388,4 +448,7 @@ export default {
   getRunningHubConfig,
   getRunningHubConfigPublic,
   saveRunningHubConfig,
+  getComfyUIConfig,
+  getComfyUIConfigPublic,
+  saveComfyUIConfig,
 };

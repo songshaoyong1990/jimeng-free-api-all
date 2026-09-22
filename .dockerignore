@@ -14,6 +14,10 @@ logs
 dist
 node_modules
 
+# 运行时数据与本机工具缓存，不打进镜像
+data
+.pack-cache
+
 # 文档
 doc
 docs
