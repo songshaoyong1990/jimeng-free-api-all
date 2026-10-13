@@ -804,8 +804,15 @@ async function generateRunningHubImagesOnce(
         : await fetchWorkflowFields(baseUrl, key, parsed.id);
     logger.info(`[RunningHub] 字段数=${fields.length}`);
 
+    const imageSlotCount = fields.filter((field) => rhFieldKind(field) === "image").length;
+    const uploadLimit = imageSlotCount > 0 ? imageSlotCount : 0;
+    if (imageSources.length > uploadLimit) {
+      logger.warn(
+        `[RunningHub] 参考图 ${imageSources.length} 张，图片字段 ${uploadLimit} 个，多余已忽略`
+      );
+    }
     const uploadedImages: string[] = [];
-    for (const source of imageSources.slice(0, 7)) {
+    for (const source of imageSources.slice(0, uploadLimit)) {
       logger.info(`[RunningHub] 上传素材 ${summarizeValue(source, 80)}`);
       uploadedImages.push(await uploadRhAsset(baseUrl, key, source));
     }

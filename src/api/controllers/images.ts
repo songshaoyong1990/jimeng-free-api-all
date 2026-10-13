@@ -12,6 +12,8 @@ export const DEFAULT_MODEL = "jimeng-image-5.0-lite";
 const DRAFT_VERSION = "3.3.20";
 const WEB_VERSION = "7.5.0";
 const MIN_VERSION = "3.0.2";
+/** 即梦 4.x 及以上多图融合上限 */
+const JIMENG_MAX_REF_IMAGES = 10;
 
 const MODEL_MAP = {
   "jimeng-image-5.0-lite": "high_aes_general_v50",
@@ -172,38 +174,50 @@ export async function generateImages(
     sampleStrength = 0.5,
     negativePrompt = "",
     filePath = "",
+    filePaths = [],
   }: {
     ratio?: string;
     resolution?: string;
     sampleStrength?: number;
     negativePrompt?: string;
-    filePath?: string; // 参考图路径，支持本地/网络
+    filePath?: string;
+    filePaths?: string[];
   },
   refreshToken: string
 ) {
-  // 检查是否有参考图
-  const hasFilePath = !!filePath;
-  let uploadID: string | null = null;
+  const refSources = _.uniq(
+    [filePath, ...(filePaths || [])].map((item) => String(item || "").trim()).filter(Boolean)
+  );
+  if (refSources.length > JIMENG_MAX_REF_IMAGES) {
+    logger.warn(
+      `🖼️ [参考图] 收到 ${refSources.length} 张，即梦生图最多 ${JIMENG_MAX_REF_IMAGES} 张，多余已忽略`
+    );
+  }
+  const refs = refSources.slice(0, JIMENG_MAX_REF_IMAGES);
+  const uploadIDs: string[] = [];
 
-  // 如果有参考图，先上传
-  if (hasFilePath) {
-    // 只显示类型信息，不显示完整的base64内容
-    const fileDesc = filePath.startsWith("data:")
-      ? `base64图片(${filePath.length}字符)`
-      : filePath.substring(0, 80);
-    logger.info(`🖼️ [参考图] 检测到参考图: ${fileDesc} → 混合模式`);
+  for (let i = 0; i < refs.length; i++) {
+    const source = refs[i];
+    const fileDesc = source.startsWith("data:")
+      ? `base64图片(${source.length}字符)`
+      : source.substring(0, 80);
+    logger.info(`🖼️ [参考图] ${i + 1}/${refs.length}: ${fileDesc}`);
     try {
-      const uploadResult = await uploadFile(refreshToken, filePath);
-      uploadID = uploadResult.image_uri;
-      logger.info(`✅ [参考图] 上传成功 | URI: ${uploadID}`);
+      const uploadResult = await uploadFile(refreshToken, source);
+      if (!uploadResult?.image_uri) {
+        throw new Error("未返回 image_uri");
+      }
+      uploadIDs.push(uploadResult.image_uri);
+      logger.info(`✅ [参考图] ${i + 1}/${refs.length} 上传成功 | URI: ${uploadResult.image_uri}`);
     } catch (error) {
-      logger.error(`❌ [参考图] 上传失败: ${error.message}`);
+      logger.error(`❌ [参考图] 第 ${i + 1} 张上传失败: ${error.message}`);
       throw new APIException(
         EX.API_REQUEST_FAILED,
-        `参考图上传失败: ${error.message}`
+        `第 ${i + 1} 张参考图上传失败: ${error.message}`
       );
     }
   }
+  const hasFilePath = uploadIDs.length > 0;
 
   // 使用用户选择的模型（混合模式不再强制3.0）
   const modelName = _model;
@@ -262,7 +276,7 @@ export async function generateImages(
   logger.info(`   🔗 映射: ${model}`);
   logger.info(`   📏 尺寸: ${finalWidth}x${finalHeight} (${validRatio})`);
   logger.info(`   🔍 分辨率: ${resolutionType.toUpperCase()} | 精细度: ${sampleStrength}`);
-  logger.info(`   🎯 模式: ${hasFilePath ? "混合(参考图)" : "文生图"}`);
+  logger.info(`   🎯 模式: ${hasFilePath ? `混合(参考图 ${uploadIDs.length} 张)` : "文生图"}`);
   logger.info(`═══════════════════════════════════════════════════════════\n`);
 
   const { totalCredit } = await getCredit(refreshToken);
@@ -273,70 +287,67 @@ export async function generateImages(
   // 构建 abilities 对象
   let abilities: Record<string, any>;
 
-  if (hasFilePath && uploadID) {
-    // 混合模式 abilities
+  if (hasFilePath) {
+    const blend: Record<string, any> = {
+      type: "",
+      id: util.uuid(),
+      min_features: [],
+      core_param: {
+        type: "",
+        id: util.uuid(),
+        model,
+        prompt: `${"#".repeat(uploadIDs.length * 2)}${prompt}`,
+        sample_strength: sampleStrength,
+        image_ratio: imageRatio,
+        large_image_info: {
+          type: "",
+          id: util.uuid(),
+          height: finalHeight,
+          width: finalWidth,
+          resolution_type: resolutionType,
+        },
+      },
+      ability_list: uploadIDs.map((imageUri) => ({
+        type: "",
+        id: util.uuid(),
+        name: "byte_edit",
+        image_uri_list: [imageUri],
+        image_list: [
+          {
+            type: "image",
+            id: util.uuid(),
+            source_from: "upload",
+            platform_type: 1,
+            name: "",
+            image_uri: imageUri,
+            width: 0,
+            height: 0,
+            format: "",
+            uri: imageUri,
+          },
+        ],
+        strength: sampleStrength,
+      })),
+      history_option: {
+        type: "",
+        id: util.uuid(),
+      },
+      prompt_placeholder_info_list: uploadIDs.map((_, index) => ({
+        type: "",
+        id: util.uuid(),
+        ability_index: index,
+      })),
+      postedit_param: {
+        type: "",
+        id: util.uuid(),
+        generate_type: 0,
+      },
+    };
+    if (uploadIDs.length >= 2) blend.min_version = "3.2.9";
     abilities = {
       type: "",
       id: util.uuid(),
-      blend: {
-        type: "",
-        id: util.uuid(),
-        min_features: [],
-        core_param: {
-          type: "",
-          id: util.uuid(),
-          model,
-          prompt: prompt + "##",
-          sample_strength: sampleStrength,
-          image_ratio: imageRatio,
-          large_image_info: {
-            type: "",
-            id: util.uuid(),
-            height: finalHeight,
-            width: finalWidth,
-            resolution_type: resolutionType,
-          },
-        },
-        ability_list: [
-          {
-            type: "",
-            id: util.uuid(),
-            name: "byte_edit",
-            image_uri_list: [uploadID],
-            image_list: [
-              {
-                type: "image",
-                id: util.uuid(),
-                source_from: "upload",
-                platform_type: 1,
-                name: "",
-                image_uri: uploadID,
-                width: 0,
-                height: 0,
-                format: "",
-                uri: uploadID,
-              },
-            ],
-            strength: 0.5,
-          },
-        ],
-        history_option: {
-          type: "",
-          id: util.uuid(),
-        },
-        prompt_placeholder_info_list: [
-          {
-            type: "",
-            id: util.uuid(),
-            ability_index: 0,
-          },
-        ],
-        postedit_param: {
-          type: "",
-          id: util.uuid(),
-          generate_type: 0,
-        },
-      },
+      blend,
     };
   } else {
     // 普通生成模式 abilities
@@ -415,7 +426,7 @@ export async function generateImages(
     draft_content: JSON.stringify({
       type: "draft",
       id: util.uuid(),
-      min_version: MIN_VERSION,
+      min_version: uploadIDs.length >= 2 ? "3.2.9" : MIN_VERSION,
       min_features: [],
       is_from_tsn: true,
       version: DRAFT_VERSION,
@@ -424,7 +435,7 @@ export async function generateImages(
         {
           type: "image_base_component",
           id: componentId,
-          min_version: MIN_VERSION,
+          min_version: uploadIDs.length >= 2 ? "3.2.9" : MIN_VERSION,
           metadata: {
             type: "",
             id: util.uuid(),
@@ -630,6 +641,7 @@ export async function generateImagesWithRetry(
     sampleStrength?: number;
     negativePrompt?: string;
     filePath?: string;
+    filePaths?: string[];
   },
   refreshToken: string
 ): Promise<string[]> {

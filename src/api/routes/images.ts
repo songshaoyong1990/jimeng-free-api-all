@@ -408,7 +408,9 @@ export default {
         .validate("body.resolution", isOptionalString)
         .validate("body.sample_strength", (v) => _.isUndefined(v) || _.isFinite(v))
         .validate("body.response_format", isOptionalString)
-        .validate("body.filePath", isOptionalString)
+        .validate("body.filePath", isOptionalStringOrArray)
+        .validate("body.filePaths", (v) => _.isUndefined(v) || _.isArray(v))
+        .validate("body.file_paths", (v) => _.isUndefined(v) || _.isArray(v))
         .validate("body.base_url", isOptionalString)
         .validate("body.instance_type", isOptionalString)
         .validate("body.payment", isOptionalString)
@@ -437,7 +439,6 @@ export default {
         resolution,
         sample_strength: sampleStrength,
         response_format,
-        filePath: bodyFilePath,
       } = request.body;
 
       const model =
@@ -460,26 +461,12 @@ export default {
         throw new APIException(EX.API_REQUEST_PARAMS_INVALID, "Authorization token is empty");
       }
 
-      let filePath = bodyFilePath;
-      // multipart multiples:true 时同名字段可能是数组；只取第一张给即梦参考图
-      const files = (request.files || {}) as Record<string, any>;
-      if (!filePath && !_.isEmpty(files)) {
-        for (const key of Object.keys(files)) {
-          const value = files[key];
-          const list = Array.isArray(value) ? value : value ? [value] : [];
-          for (const file of list) {
-            const p = file?.filepath || file?.path;
-            if (typeof p === "string" && p.trim()) {
-              filePath = p.trim();
-              break;
-            }
-          }
-          if (filePath) break;
-        }
-      }
+      const filePaths = collectOpenAIInputImages(request.body, request.files);
 
       const responseFormat = _.defaultTo(response_format, "url");
-      logger.info(`[Images] /generations backend=Jimeng model=${model} response_format=${responseFormat}`);
+      logger.info(
+        `[Images] /generations backend=Jimeng model=${model} refs=${filePaths.length} response_format=${responseFormat}`
+      );
 
       const imageUrls = await generateImagesWithRetry(
         model,
@@ -489,7 +476,7 @@ export default {
           resolution,
           sampleStrength,
           negativePrompt,
-          filePath,
+          filePaths,
         },
         token
       );

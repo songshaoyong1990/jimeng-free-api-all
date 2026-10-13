@@ -229,7 +229,7 @@ export async function createCompletion(
         {
           ratio: "1:1",  // 默认比例
           resolution: "2k",  // 初始尝试 2K，会自动降级
-          filePath: imageUrls.length > 0 ? imageUrls[0] : "", // 第一张图片作为参考图
+          filePaths: imageUrls,
         },
         refreshToken
       );
@@ -542,7 +542,7 @@ export async function createCompletionStream(
       generateImagesWithRetry(
         model,
         promptText || lastMessage.content,
-        { ratio: "1:1", resolution: "2k", filePath: imageUrls.length > 0 ? imageUrls[0] : "" },
+        { ratio: "1:1", resolution: "2k", filePaths: imageUrls },
         refreshToken
       )
         .then((generatedUrls) => {

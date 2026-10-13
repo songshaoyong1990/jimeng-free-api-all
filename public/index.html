@@ -3561,9 +3561,22 @@
         const model = resolveTestModelId();
         const selected = testImageItems.length;
         if (isTestVideoMode()) {
+          const jimengVideo = !model || String(model).startsWith("jimeng-video");
+          if (jimengVideo) {
+            hint.textContent = selected
+              ? `已选 ${selected} 张（即梦视频只用前 2 张：第 1 张首帧，第 2 张尾帧）`
+              : "即梦视频可选 1 张首帧或 2 张首尾帧；无图则文生视频。需要 session API Key。";
+            return;
+          }
           hint.textContent = selected
             ? `已选 ${selected} 张首尾帧参考图（即梦视频：按顺序作为图生视频输入）`
             : "视频可选上传首/尾帧参考图；无图则纯文生视频。即梦视频需填写 session API Key。";
+          return;
+        }
+        if (String(model || "").startsWith("jimeng-image")) {
+          hint.textContent = selected
+            ? `已选 ${selected} 张参考图（即梦生图最多 10 张，按顺序提交）`
+            : "即梦生图可选参考图，最多 10 张；不传则文生图。";
           return;
         }
         const slots = testModelMediaSlots(model);
@@ -3664,10 +3677,10 @@
           fileInput.accept = video ? "image/*" : "image/*,video/*,audio/*";
         }
         document.getElementById("test-images-label").textContent = video
-          ? "首尾帧参考图（可选，可多张，按顺序 → file_paths / image）"
+          ? "参考图（即梦视频只用前 2 张：首帧、尾帧）"
           : testEndpoint === "images/edits"
             ? "参考媒体（必填，图/视频/音频）"
-            : "参考媒体（图/视频/音频，可选，H3 多参考）";
+            : "参考媒体（可多选；即梦生图最多 10 张）";
         saveTestLS({ endpoint: testEndpoint });
         populateTestModels();
         updateTestImagesHintForModel();

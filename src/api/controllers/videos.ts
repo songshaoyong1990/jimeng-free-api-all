@@ -370,21 +370,27 @@ export async function submitVideoGeneration(
   let first_frame_image = undefined;
   let end_frame_image = undefined;
 
-  if (filePaths && filePaths.length > 0) {
-    // 统计图片类型而不是显示完整内容
-    const imageTypes = filePaths.map((p) =>
+  const frameSources = (filePaths || []).filter((item) => String(item || "").trim());
+  if (frameSources.length > 2) {
+    logger.warn(
+      `即梦视频只使用首帧和尾帧，收到 ${frameSources.length} 张，第 3 张及以后已忽略`
+    );
+  }
+  const frames = frameSources.slice(0, 2);
+  if (frames.length > 0) {
+    const imageTypes = frames.map((p) =>
       p.startsWith("data:") ? "base64" : p.startsWith("http") ? "url" : "file"
     );
     logger.info(
-      `接收到 ${filePaths.length} 张图片用于首尾帧，类型: ${JSON.stringify(
+      `接收到 ${frames.length} 张图片用于首尾帧，类型: ${JSON.stringify(
         imageTypes
       )}`
     );
     let uploadIDs: string[] = [];
 
-    for (let i = 0; i < filePaths.length; i++) {
+    for (let i = 0; i < frames.length; i++) {
       // ... (Upload Logic similar to previous) ...
-      const filePath = filePaths[i];
+      const filePath = frames[i];
       if (!filePath) continue;
       try {
         const pathDesc = filePath.startsWith("data:")

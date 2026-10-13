@@ -67,6 +67,8 @@ const KNOWN_OPENAI_KEYS = new Set([
   "resolution",
   "sample_strength",
   "filePath",
+  "filePaths",
+  "file_paths",
   "base_url",
   "instance_type",
   "payment",
@@ -129,10 +131,18 @@ function collectFilePathsLegacy(files: unknown): string[] {
 /** 从 OpenAI generations/edits 的 body + multipart 收集参考图来源 */
 export function collectOpenAIInputImages(body: Record<string, any> = {}, files?: unknown): string[] {
   const images: string[] = [];
-  pushImageSource(images, body.image);
-  if (Array.isArray(body.image)) body.image.forEach((item) => pushImageSource(images, item));
-  if (Array.isArray(body.images)) body.images.forEach((item) => pushImageSource(images, item));
-  if (typeof body.filePath === "string" && body.filePath.trim()) images.push(body.filePath.trim());
+  const pushMany = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(pushMany);
+      return;
+    }
+    pushImageSource(images, value);
+  };
+  pushMany(body.image);
+  pushMany(body.images);
+  pushMany(body.filePath);
+  pushMany(body.filePaths);
+  pushMany(body.file_paths);
   images.push(...collectFilePathsLegacy(files));
   return _.uniq(images);
 }
