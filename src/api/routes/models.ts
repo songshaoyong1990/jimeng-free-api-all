@@ -61,6 +61,28 @@ export default {
                 }
             }
 
+            // 附带管理台已启用的 Muse2API 模型（muse:image / muse:video / muse:spark）
+            const muse = db.getMuse2APIConfigPublic();
+            const existingMuse = new Set(data.map((item) => item.id));
+            for (const item of muse.models) {
+                if (item.enabled === false) continue;
+                if (type === 'image' && item.type !== 'image') continue;
+                if (type === 'video' && item.type !== 'video') continue;
+                if (existingMuse.has(item.id)) continue;
+                data.push({
+                    id: item.id,
+                    object: 'model',
+                    owned_by: 'muse2api',
+                    description: item.description,
+                    name: item.name,
+                    model_req_key: item.upstream,
+                    supported_resolutions: [],
+                    default_resolution: '',
+                    source: 'muse2api',
+                });
+                existingMuse.add(item.id);
+            }
+
             return { data };
         }
 

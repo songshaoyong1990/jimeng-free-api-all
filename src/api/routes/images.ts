@@ -4,6 +4,11 @@ import Request from "@/lib/request/Request.ts";
 import { DEFAULT_MODEL, generateImagesWithRetry } from "@/api/controllers/images.ts";
 import { generateRunningHubImages, isRunningHubModel } from "@/api/controllers/runninghub.ts";
 import { generateComfyUIImages, isComfyUIModel } from "@/api/controllers/comfyui.ts";
+import {
+  generateMuseImages,
+  ratioFromOpenAISize,
+  resolveMuse2APIAuth,
+} from "@/api/controllers/muse2api.ts";
 import { tokenSplit } from "@/api/controllers/core.ts";
 import util from "@/lib/util.ts";
 import db from "@/lib/database.ts";
@@ -12,6 +17,7 @@ import APIException from "@/lib/exceptions/APIException.ts";
 import EX from "@/api/consts/exceptions.ts";
 import { isRunningHubModelEnabled, isWalletPayment, resolveRunningHubEntry } from "@/lib/runninghub-config.ts";
 import { isComfyUIModelEnabled, resolveComfyUIEntry } from "@/lib/comfyui-config.ts";
+import { isMuse2APIModel, looksLikeMuse2APIKey, parseMuse2APIModel } from "@/lib/muse2api-config.ts";
 import {
   applyOpenAIParamsToRh,
   collectOpenAIInputAudios,
@@ -387,6 +393,84 @@ async function handleComfyUIImages(request: Request, endpoint: "generations" | "
   return response;
 }
 
+/** muse2api 只认 m2a_ 前缀的 Key，避免把即梦 session 误发过去 */
+function resolveMuseHeaderToken(authorization: unknown) {
+  const tokens = typeof authorization === "string" ? tokenSplit(authorization) : [];
+  return tokens.find((token) => looksLikeMuse2APIKey(token)) || "";
+}
+
+async function handleMuseImages(request: Request, endpoint: "generations" | "edits") {
+  const body = request.body || {};
+  const museConfig = db.getMuse2APIConfig();
+  const openai = normalizeOpenAIImageBody(body);
+  const imageList = collectOpenAIInputImages(body, request.files);
+  const prompt =
+    String(body.prompt || "").trim() ||
+    (imageList.length ? "参考此图片并进行生图创作" : "");
+  if (!prompt) {
+    throw new APIException(EX.API_REQUEST_PARAMS_INVALID, "prompt 不能为空");
+  }
+  if (endpoint === "edits" && !imageList.length) {
+    throw new APIException(
+      EX.API_REQUEST_PARAMS_INVALID,
+      "edits 需要至少一张参考图（image / images / multipart）"
+    );
+  }
+
+  const bodyModel = typeof body.model === "string" ? body.model.trim() : "";
+  const model =
+    bodyModel || (isMuse2APIModel(museConfig.defaultModel) ? museConfig.defaultModel : "");
+  if (!model || !isMuse2APIModel(model)) {
+    throw new APIException(
+      EX.API_REQUEST_PARAMS_INVALID,
+      "无效的 muse2api 模型，请使用 muse:image（或上游名 muse-image）"
+    );
+  }
+
+  const headerToken = resolveMuseHeaderToken(request.headers.authorization);
+  const requestBaseUrl = typeof body.base_url === "string" ? body.base_url : museConfig.baseUrl;
+  const auth = resolveMuse2APIAuth(museConfig, { baseUrl: requestBaseUrl, headerToken });
+
+  const size = openai.size || (typeof body.ratio === "string" ? body.ratio.trim() : "");
+  const aspectRatio =
+    (typeof body.ratio === "string" && body.ratio.trim()) ||
+    (typeof body.aspect_ratio === "string" && body.aspect_ratio.trim()) ||
+    ratioFromOpenAISize(openai.size);
+  const timeoutRaw = Number(body.timeout);
+  const timeout = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? Math.min(600, Math.floor(timeoutRaw)) : undefined;
+
+  logger.info(
+    `[Images] /${endpoint} backend=Muse2API model=${model} base=${auth.baseUrl} n=${openai.n} size=${size || "-"} ratio=${aspectRatio || "-"} images=${imageList.length} response_format=${openai.responseFormat} auth=${headerToken ? "header" : museConfig.apiKey ? "dashboard" : "env"}`
+  );
+
+  const imageUrls = await generateMuseImages(
+    model,
+    prompt,
+    {
+      images: imageList,
+      size,
+      aspectRatio,
+      n: openai.n,
+      timeout,
+      baseUrl: auth.baseUrl,
+      headerToken,
+    },
+    museConfig
+  );
+
+  try {
+    db.recordCall(auth.apiKey, model, 0);
+    imageUrls.forEach((url) => {
+      if (url) db.saveMedia("image", url, model, prompt, auth.apiKey);
+    });
+  } catch (e) {
+    // 忽略数据库错误
+  }
+
+  logger.info(`[Images] /${endpoint} Muse2API 完成 model=${model} urls=${imageUrls.length}`);
+  return buildOpenAIImageResponse(imageUrls, openai.responseFormat);
+}
+
 export default {
   prefix: "/v1/images",
 
@@ -406,6 +490,8 @@ export default {
         .validate("body.negative_prompt", isOptionalString)
         .validate("body.ratio", isOptionalString)
         .validate("body.resolution", isOptionalString)
+        .validate("body.aspect_ratio", isOptionalString)
+        .validate("body.timeout", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
         .validate("body.sample_strength", (v) => _.isUndefined(v) || _.isFinite(v))
         .validate("body.response_format", isOptionalString)
         .validate("body.filePath", isOptionalStringOrArray)
@@ -431,6 +517,7 @@ export default {
 
       const rhConfig = db.getRunningHubConfig();
       const comfyConfig = db.getComfyUIConfig();
+      const museConfig = db.getMuse2APIConfig();
       const {
         model: bodyModel,
         prompt,
@@ -441,18 +528,25 @@ export default {
         response_format,
       } = request.body;
 
+      const museDefaultModel =
+        parseMuse2APIModel(museConfig.defaultModel)?.type === "image"
+          ? museConfig.defaultModel
+          : "";
       const model =
         bodyModel ||
         (rhConfig.defaultModel && isRunningHubModel(rhConfig.defaultModel)
           ? rhConfig.defaultModel
           : comfyConfig.defaultModel && isComfyUIModel(comfyConfig.defaultModel)
             ? comfyConfig.defaultModel
-            : DEFAULT_MODEL);
+            : museDefaultModel || DEFAULT_MODEL);
       if (isRunningHubModel(model)) {
         return handleRunningHubImages(request, "generations");
       }
       if (isComfyUIModel(model)) {
         return handleComfyUIImages(request, "generations");
+      }
+      if (isMuse2APIModel(model)) {
+        return handleMuseImages(request, "generations");
       }
 
       // —— 即梦路径保持原样 ——
@@ -516,6 +610,8 @@ export default {
         .validate("body.seconds", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
         .validate("body.ratio", isOptionalString)
         .validate("body.resolution", isOptionalString)
+        .validate("body.aspect_ratio", isOptionalString)
+        .validate("body.timeout", (v) => _.isUndefined(v) || _.isFinite(v) || _.isString(v))
         .validate("body.base_url", isOptionalString)
         .validate("body.instance_type", isOptionalString)
         .validate("body.payment", isOptionalString)
@@ -525,8 +621,17 @@ export default {
         .validate("body.comfy_params", (v) => _.isUndefined(v) || _.isObject(v));
 
       const bodyModel = typeof request.body?.model === "string" ? request.body.model : "";
+      if (isMuse2APIModel(bodyModel)) {
+        return handleMuseImages(request, "edits");
+      }
       if (isComfyUIModel(bodyModel) || (!bodyModel && isComfyUIModel(db.getComfyUIConfig().defaultModel))) {
         return handleComfyUIImages(request, "edits");
+      }
+      if (
+        !bodyModel &&
+        parseMuse2APIModel(db.getMuse2APIConfig().defaultModel)?.type === "image"
+      ) {
+        return handleMuseImages(request, "edits");
       }
       return handleRunningHubImages(request, "edits");
     },

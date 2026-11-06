@@ -705,7 +705,20 @@ export function getStaticModelReqKey(
   return getStaticModelConfig(modelIdOrReqKey, type)?.modelReqKey;
 }
 
-export function toOpenAIModel(model: JimengModelConfig) {
+export type OpenAIModelItem = {
+  id: string;
+  object: "model";
+  owned_by: string;
+  description: string;
+  name: string;
+  model_req_key: string;
+  supported_resolutions: string[];
+  default_resolution: string;
+  /** jimeng 静态/动态模型与 RunningHub / ComfyUI / Muse2API 目录 */
+  source: string;
+};
+
+export function toOpenAIModel(model: JimengModelConfig): OpenAIModelItem {
   return {
     id: model.id,
     object: "model",

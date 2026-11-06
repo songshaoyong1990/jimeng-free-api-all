@@ -15,6 +15,14 @@ import {
   type ComfyUIEntry,
   type ComfyUIStoredConfig,
 } from './comfyui-config.ts';
+import {
+  MUSE2API_MODELS,
+  muse2apiModelStates,
+  isMuse2APIModel,
+  normalizeMuse2APIBaseUrl,
+  type Muse2APIModelState,
+  type Muse2APIStoredConfig,
+} from './muse2api-config.ts';
 
 // 数据库文件路径
 const DB_PATH = process.env.DB_PATH || './data/jimeng.db';
@@ -104,6 +112,13 @@ const COMFY_SETTING_KEYS = {
   baseUrl: 'comfyui.baseUrl',
   defaultModel: 'comfyui.defaultModel',
   workflows: 'comfyui.workflows',
+} as const;
+
+const MUSE_SETTING_KEYS = {
+  baseUrl: 'muse2api.baseUrl',
+  apiKey: 'muse2api.apiKey',
+  defaultModel: 'muse2api.defaultModel',
+  models: 'muse2api.models',
 } as const;
 
 export type RunningHubConfig = RunningHubStoredConfig;
@@ -430,6 +445,80 @@ export function saveComfyUIConfig(input: {
   return getComfyUIConfigPublic();
 }
 
+// ==================== Muse2API 配置 ====================
+
+export type Muse2APIConfig = Muse2APIStoredConfig;
+
+export type Muse2APIConfigPublic = {
+  baseUrl: string;
+  apiKeyPreview: string;
+  hasApiKey: boolean;
+  /** 是否通过环境变量 MUSE2API_KEY 提供 Key */
+  envApiKey: boolean;
+  defaultModel: string;
+  models: Muse2APIModelState[];
+};
+
+export function getMuse2APIConfig(): Muse2APIConfig {
+  const models = parseJsonSetting<Record<string, boolean>>(MUSE_SETTING_KEYS.models, {});
+  const defaultModel = getSetting(MUSE_SETTING_KEYS.defaultModel);
+  return {
+    // 空串表示「管理台没配」，交给 resolveMuse2APIBaseUrl 走环境变量 / 默认值
+    baseUrl: String(getSetting(MUSE_SETTING_KEYS.baseUrl) || '').trim(),
+    apiKey: getSetting(MUSE_SETTING_KEYS.apiKey),
+    defaultModel: isMuse2APIModel(defaultModel) ? defaultModel : '',
+    models: models && typeof models === 'object' && !Array.isArray(models) ? models : {},
+  };
+}
+
+export function getMuse2APIConfigPublic(): Muse2APIConfigPublic {
+  const config = getMuse2APIConfig();
+  return {
+    // 展示当前实际生效地址（管理台 > 环境变量 > 默认）
+    baseUrl: normalizeMuse2APIBaseUrl(
+      config.baseUrl || process.env.MUSE2API_BASE_URL || ''
+    ),
+    apiKeyPreview: config.apiKey ? keyPreview(config.apiKey) : '',
+    hasApiKey: Boolean(config.apiKey),
+    envApiKey: Boolean(String(process.env.MUSE2API_KEY || '').trim()),
+    defaultModel: config.defaultModel,
+    models: muse2apiModelStates(config),
+  };
+}
+
+export function saveMuse2APIConfig(input: {
+  baseUrl?: string;
+  apiKey?: string;
+  defaultModel?: string;
+  models?: Record<string, boolean> | Muse2APIModelState[];
+  clearApiKey?: boolean;
+}): Muse2APIConfigPublic {
+  if (input.clearApiKey) {
+    setSetting(MUSE_SETTING_KEYS.apiKey, '');
+  } else if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
+    setSetting(MUSE_SETTING_KEYS.apiKey, input.apiKey.trim());
+  }
+  if (typeof input.baseUrl === 'string') {
+    setSetting(MUSE_SETTING_KEYS.baseUrl, normalizeMuse2APIBaseUrl(input.baseUrl));
+  }
+  if (typeof input.defaultModel === 'string') {
+    const model = input.defaultModel.trim();
+    setSetting(MUSE_SETTING_KEYS.defaultModel, isMuse2APIModel(model) ? model : '');
+  }
+  if (input.models) {
+    const incoming = Array.isArray(input.models)
+      ? Object.fromEntries(input.models.map((item) => [item.id, item.enabled !== false]))
+      : input.models;
+    const known = new Set(MUSE2API_MODELS.map((item) => item.id));
+    const next: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(incoming)) {
+      if (known.has(key)) next[key] = value !== false;
+    }
+    setSetting(MUSE_SETTING_KEYS.models, JSON.stringify(next));
+  }
+  return getMuse2APIConfigPublic();
+}
+
 export default {
   isSetupComplete,
   createUser,
@@ -451,4 +540,7 @@ export default {
   getComfyUIConfig,
   getComfyUIConfigPublic,
   saveComfyUIConfig,
+  getMuse2APIConfig,
+  getMuse2APIConfigPublic,
+  saveMuse2APIConfig,
 };

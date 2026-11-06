@@ -13,6 +13,13 @@ services:
       - NODE_ENV=production
       - SERVER_PORT=8000
       - DB_PATH=/app/data/jimeng.db
+      # Muse2API：容器内 127.0.0.1 指向自己，必须走宿主机网关。
+      # 同网络也可用容器名 http://muse2api:18610
+      - MUSE2API_BASE_URL=${MUSE2API_BASE_URL:-http://host.docker.internal:18610}
+      # 密钥从宿主环境变量注入（也可在管理台 Muse2API 页保存，优先级更高）
+      - MUSE2API_KEY=${MUSE2API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # 使用本机 data，带上已导入的 ComfyUI 工作流
       - ./data:/app/data

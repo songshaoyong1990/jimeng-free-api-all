@@ -15,6 +15,14 @@
 
 ## 更新日志
 
+### 2026-11-06
+
+- **接入 Muse2API**：新增 `muse:image` / `muse:video` / `muse:spark` 三个后端模型，`/v1/images/generations`、`/v1/images/edits`、`/v1/videos`、`/v1/chat/completions` 按 `model` 自动分流到已部署的 muse2api。
+- **管理台新增 Muse2API 页**：可配置 Base URL、`m2a_` 管理密钥、默认模型与模型启停，并提供「测试连通」。
+- **密钥与地址可环境变量提供**：`MUSE2API_BASE_URL` / `MUSE2API_KEY`，未配置管理台时自动回退；请求头只识别 `m2a_` 前缀的 Key，避免把即梦 session 误发上游。
+- **视频异步任务**：`POST /v1/videos` 返回 `muse-{task_id}`，`GET /v1/videos/{id}` 轮询、`/content` 直取 mp4；参考素材（本地文件）自动转 data URL。
+- **修复 `/v1/models` 类型**：RunningHub / ComfyUI 目录条目的 `source` 不再与即梦模型类型冲突。
+
 ### 2026-06-24
 
 - **适配即梦官网新图片模型**：新增 `jimeng-image-5.0-lite`（`high_aes_general_v50`），并补充 `jimeng-image-4.7`、`jimeng-image-4.6`；图片默认模型更新为 5.0 Lite，4.x/5.x 支持 2K 默认与 4K 请求。
@@ -56,7 +64,8 @@
 - **超强模型支持**：集成图像模型（5.0 Lite/4.7/4.6/4.5/4.1/4.0/3.1/3.0/2.0 Pro）和视频模型（Seedance 2.0 Mini/Fast/Pro、Seedance 1.5 Pro、3.0 Pro/3.0/3.0 Fast/S2.0/2.0 Pro），并支持自动同步即梦官网最新模型列表。
 - **完全免费体验**：目前官方每日赠送 66 积分，支持多路 Token 轮询，最大化利用免费额度。
 - **可视化管理**：内置功能强大的 Web 管理控制台，支持实时监控和媒体管理。
-- **OpenAI 兼容**：完全兼容 OpenAI 接口格式，可直接接入大多数现有 AI 应用；`/v1/images/generations` 可按 `model` 切换即梦或 RunningHub。
+- **OpenAI 兼容**：完全兼容 OpenAI 接口格式，可直接接入大多数现有 AI 应用；`/v1/images/generations` 可按 `model` 切换即梦、RunningHub、ComfyUI 或 Muse2API。
+- **多后端聚合**：同一个端点聚合即梦、RunningHub、本地 ComfyUI 与 muse2api（`muse:image` / `muse:video` / `muse:spark`）。
 - **零配置部署**：通过 Docker 一键启动，开箱即用。
 
 ---
@@ -89,6 +98,7 @@
 | **🖼️ 媒体回溯** | 所有生成的图片和视频都会自动记录在媒体库中，支持按类型（图片/视频）筛选，点击即可预览高清原图或播放视频。 |
 | **💳 积分追踪** | **[NEW]** 每次请求自动计算并记录消耗积分，实时更新 Token 的剩余积分，精准掌握额度使用情况。               |
 | **⚙️ RunningHub** | 对齐 infinite-canvas 渠道页：双 Key、导入默认目录 / 粘贴链接、启用 app·workflow；OpenAI 生图可免带 Authorization。 |
+| **🎭 Muse2API** | 对接已部署的 muse2api：Base URL、`m2a_` 密钥、默认模型、模型启停与连通测试；生图 / 生视频 / 对话统一走 OpenAI 接口。 |
 
 ### 🚀 访问地址
 
@@ -193,6 +203,8 @@ npm start
 | `jimeng-image-2.0-pro` | 即梦 2.0 Pro 版本         | 仅支持 1K |
 | `app:{webappId}`       | RunningHub AI App         | 由应用定义 |
 | `workflow:{workflowId}`| RunningHub Workflow       | 由工作流定义 |
+| `comfy:{workflowId}`   | 本地 ComfyUI 工作流        | 由工作流定义 |
+| `muse:image`           | Muse2API 文生图 / 参考图   | 由上游决定（`size` 支持 `16:9`、`1024x1024` 等） |
 
 ### 🎥 视频生成
 
@@ -207,6 +219,7 @@ npm start
 | `jimeng-video-3.0-fast` | 3.0 快速版     | 5s / 10s |
 | `jimeng-video-s2.0`     | S2.0 轻量版    | 5s       |
 | `jimeng-video-2.0-pro`  | 2.0 Pro 版     | 5s       |
+| `muse:video`            | Muse2API 文生/图生视频 | 由上游决定（可传 5/6/8/10） |
 
 ---
 
@@ -332,6 +345,103 @@ Content-Type: multipart/form-data
 - 管理台**禁用**的条目会报错；目录为空时仍允许直接传未入库的 `app:` / `workflow:` id。  
 - `/v1/images/edits` 本阶段仅 RunningHub，不接即梦。  
 - 本版仅覆盖 RunningHub **App / Workflow（v1）**，不含标准模型 v2 / Latent。
+
+---
+
+## 🎭 Muse2API 接入（muse.ai 逆向服务）
+
+把已部署的 [muse2api](https://github.com/czg86389-hub/muse2api) 当成又一个后端：图片、视频、文本对话都复用本服务现有接口，按 `model` 自动分流。
+
+### 1. 支持的模型
+
+| 模型名 | 上游 | 走哪个接口 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `muse:image`（别名 `muse-image`） | `muse-image` | `/v1/images/generations`、`/v1/images/edits` | 文生图 / 参考图生图，最多 10 个参考素材 |
+| `muse:video`（别名 `muse-video`） | `muse-video` | `/v1/videos`、`/v1/videos/{id}` | 文生视频 / 首帧图生视频，异步任务 |
+| `muse:spark`（别名 `muse-spark`） | `muse-spark` | `/v1/chat/completions` | 文本 / 代码对话，支持 `stream` |
+
+### 2. 管理台怎么配
+
+1. 打开 `http://127.0.0.1:8001` → 登录 → **Muse2API** 页
+2. **Base URL** 填 muse2api 地址（默认 `http://127.0.0.1:18610`，误填 `/v1` 会自动去掉）
+3. **管理密钥** 填 `m2a_` 开头的 `MUSE2API_KEY`，保存
+4. 点 **测试连通**（会拉上游 `/v1/models` 验证 Key）
+5. 按需启用模型，可设默认模型（不传 `model` 时使用）
+6. 启用的模型会出现在 `GET /v1/models`（`owned_by: muse2api`）
+
+也可完全不用管理台，直接用环境变量：
+
+```bash
+-e MUSE2API_BASE_URL=http://127.0.0.1:18610 \
+-e MUSE2API_KEY=m2a_xxxxxxxx
+```
+
+> 优先级：请求头 `Authorization: Bearer m2a_...`（仅识别 `m2a_` 前缀）> 管理台保存的 Key > 环境变量 `MUSE2API_KEY`。
+> 因此同一个客户端配置里混用即梦 session 也不会被误发给 muse2api。
+
+**容器部署注意**：容器里的 `127.0.0.1` 指向容器自己。
+
+- 与本服务同一个 Docker 网络：填 `http://muse2api:18610`（muse2api 的容器名）
+- 跨网络 / 部署在宿主机：填 `http://host.docker.internal:18610`（compose 已加 `extra_hosts: host-gateway`）
+- 改完 `docker-compose.yml` 后：`docker compose up -d --build`
+
+### 3. 调用示例
+
+生图（`images` 里可放 URL / data URL / Base64，按顺序上传）：
+
+```http
+POST /v1/images/generations
+Content-Type: application/json
+
+{
+  "model": "muse:image",
+  "prompt": "一只穿着反重力宇航服的机械柴犬，电影级光影",
+  "size": "16:9",
+  "response_format": "url"
+}
+```
+
+带参考图也可用 `POST /v1/images/edits`（multipart 的 `image` 可重复）：
+
+```bash
+curl -X POST http://127.0.0.1:8001/v1/images/edits \
+  -F "model=muse:image" \
+  -F "prompt=结合两张参考图生成一张海报" \
+  -F "image=@subject.png" -F "image=@style.png"
+```
+
+> 本服务会把 multipart 的本地临时文件转成 data URL 再转发，不依赖 muse2api 的本地文件开关。
+
+视频（异步：先提交拿 `muse-xxxx`，再轮询）：
+
+```http
+POST /v1/videos
+{ "model": "muse:video", "prompt": "金色枫叶飘落", "duration": 5, "size": "16:9" }
+→ { "id": "muse-2f0c...", "status": "in_progress", "backend": "muse2api" }
+
+GET /v1/videos/muse-2f0c...
+→ { "status": "completed", "url": "http://127.0.0.1:18610/v1/media/vid_xxx.mp4" }
+
+GET /v1/videos/muse-2f0c.../content   # 直接取 mp4 二进制
+```
+
+需要一次拿到结果可用 `POST /v1/videos/generations`（内部提交 + 轮询，最长约 11 分钟）。
+
+对话：
+
+```http
+POST /v1/chat/completions
+{ "model": "muse:spark", "messages": [{"role":"user","content":"写一首赛博朋克七绝"}], "stream": true }
+```
+
+### 4. 说明
+
+- `n` 会连续提交多次（最多 4 次）并合并结果，与 RunningHub 行为一致。
+- muse2api 未配置 `MUSE2API_PUBLIC_BASE` 时会返回 `/v1/media/xxx` 相对地址，本服务已按 Base URL 自动补全为绝对地址；若客户端不在同一台机器，建议给 muse2api 设置 `MUSE2API_PUBLIC_BASE=http://<可访问地址>:18610`，否则返回的媒体链接可能打不开。
+- 参考素材限制沿用 muse2api：最多 10 个、单个 40 MiB、合计 100 MiB。
+- 上游 401/429/5xx 会转成可读错误（如「muse2api 鉴权失败」「muse2api 队列已满」）。
+- 与即梦零积分不同，muse2api 依赖其账号池，浏览器/账号异常时会返回上游错误原文。
+- 若 muse2api 部署在 WSL2 且宿主机靠 Clash/FlClash 出网，容器内默认访问不到 Windows 的 `127.0.0.1:7890`，会报「muse.ai 页面加载超时」；见上游仓库 README「方式三：WSL2 Docker + Windows 本机代理」配置 `MUSE2API_DEFAULT_PROXY`。
 
 ---
 

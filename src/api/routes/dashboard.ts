@@ -4,6 +4,7 @@ import db from '@/lib/database.ts';
 import { getCredit } from '@/api/controllers/core.ts';
 import { analyzeRunningHubEntry } from '@/api/controllers/runninghub.ts';
 import { analyzeComfyUIWorkflowApi, pingComfyUI } from '@/api/controllers/comfyui.ts';
+import { pingMuse2API, resolveMuse2APIBaseUrl, resolveMuse2APIKey } from '@/api/controllers/muse2api.ts';
 import {
   loadDefaultRunningHubCatalog,
   mergeRunningHubEntries,
@@ -155,6 +156,13 @@ export default {
         return new Response({ error: '未登录' }, { statusCode: 401 });
       }
       return db.getComfyUIConfigPublic();
+    },
+
+    '/muse2api': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      return db.getMuse2APIConfigPublic();
     },
   },
 
@@ -346,6 +354,52 @@ export default {
         workflows: Array.isArray(body.workflows) ? body.workflows : undefined,
       });
       return { success: true, message: 'ComfyUI 配置已保存', data };
+    },
+
+    '/muse2api': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      const body = request.body || {};
+      const models = Array.isArray(body.models)
+        ? body.models
+        : body.models && typeof body.models === 'object'
+          ? body.models
+          : undefined;
+      const data = db.saveMuse2APIConfig({
+        baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+        apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
+        defaultModel: typeof body.defaultModel === 'string' ? body.defaultModel : undefined,
+        models,
+        clearApiKey: Boolean(body.clearApiKey),
+      });
+      return { success: true, message: 'Muse2API 配置已保存', data };
+    },
+
+    '/muse2api/ping': async (request: Request) => {
+      if (!requireSession(request)) {
+        return new Response({ error: '未登录' }, { statusCode: 401 });
+      }
+      const body = request.body || {};
+      const config = db.getMuse2APIConfig();
+      const baseUrl = resolveMuse2APIBaseUrl(
+        typeof body.baseUrl === 'string' && body.baseUrl.trim() ? body.baseUrl : config.baseUrl
+      );
+      const typedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+      const apiKey = typedKey || resolveMuse2APIKey(config);
+      try {
+        const result = await pingMuse2API({ baseUrl, apiKey });
+        return {
+          success: true,
+          message: `已连通 ${result.baseUrl}（${result.models.length} 个模型：${result.models.join(', ') || '无'}）`,
+          data: result,
+        };
+      } catch (e: any) {
+        return new Response(
+          { error: `无法连接 Muse2API（${baseUrl}）: ${e?.message || e}` },
+          { statusCode: 502 }
+        );
+      }
     },
 
     '/comfyui/import-api': async (request: Request) => {

@@ -1240,6 +1240,7 @@
         <button class="tab-btn" data-tab="media">🖼️ 媒体库</button>
         <button class="tab-btn" data-tab="runninghub">⚙️ RunningHub</button>
         <button class="tab-btn" data-tab="comfyui">🖥️ ComfyUI</button>
+        <button class="tab-btn" data-tab="muse2api">🎭 Muse2API</button>
         <button class="tab-btn" data-tab="test">🧪 接口测试</button>
       </div>
 
@@ -1494,6 +1495,66 @@
         </div>
       </div>
 
+      <!-- Muse2API Tab -->
+      <div id="tab-muse2api" class="tab-content">
+        <div class="config-panel wide">
+          <h3>Muse2API（muse.ai 逆向服务）</h3>
+          <div class="howto hint">
+            把已部署的 muse2api 作为又一个后端：生图 / 生视频 / 文本对话都走 OpenAI 兼容接口。
+            <ol>
+              <li>
+                填写 Muse2API 服务地址（默认 <code>http://127.0.0.1:18610</code>），可点「测试连通」
+              </li>
+              <li>
+                填入管理密钥（<code>m2a_</code> 开头）；也可用环境变量
+                <code>MUSE2API_KEY</code> / <code>MUSE2API_BASE_URL</code> 提供
+              </li>
+              <li>按需启用模型：<code>muse:image</code> / <code>muse:video</code> / <code>muse:spark</code></li>
+              <li>
+                <code>POST /v1/images/generations</code>（model=<code>muse:image</code>，支持
+                <code>images</code> 参考图）、<code>POST /v1/images/edits</code>、
+                <code>POST /v1/videos</code>（model=<code>muse:video</code>，返回
+                <code>muse-任务id</code> 供轮询）、
+                <code>POST /v1/chat/completions</code>（model=<code>muse:spark</code>）
+              </li>
+            </ol>
+          </div>
+
+          <div class="form-group">
+            <label>Muse2API Base URL</label>
+            <input type="text" id="muse-base-url" placeholder="http://127.0.0.1:18610" />
+          </div>
+          <div class="form-group">
+            <label>管理密钥（m2a_…）</label>
+            <input
+              type="password"
+              id="muse-api-key"
+              placeholder="留空则保持原 Key 不变"
+              autocomplete="off"
+            />
+            <div class="key-preview" id="muse-key-preview">当前未配置</div>
+          </div>
+          <div class="form-group">
+            <label>默认模型</label>
+            <select id="muse-default-model">
+              <option value="">不设置（请求必须传 model）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>启用的模型</label>
+            <div class="rh-entry-list" id="muse-models-list"></div>
+          </div>
+          <div class="config-actions">
+            <button class="btn" onclick="saveMuse2APIConfig()">保存配置</button>
+            <button class="btn btn-secondary" onclick="loadMuse2APIConfig()">重新加载</button>
+            <button class="btn btn-secondary" onclick="pingMuse2API()">测试连通</button>
+            <button class="btn btn-danger" onclick="clearMuse2APIKey()">清除密钥</button>
+          </div>
+          <div id="muse-config-msg" class="success-msg" style="display: none"></div>
+          <div id="muse-config-error" class="error-msg" style="text-align: left"></div>
+        </div>
+      </div>
+
       <!-- Test Tab -->
       <div id="tab-test" class="tab-content">
         <div class="test-grid">
@@ -1524,11 +1585,11 @@
               />
             </div>
             <div class="form-group">
-              <label id="test-api-key-label">API Key（仅即梦 session / RH 可选；Comfy 本地留空）</label>
+              <label id="test-api-key-label">API Key（即梦 session / RH / Muse2API 可选；Comfy 本地留空）</label>
               <input
                 type="password"
                 id="test-api-key"
-                placeholder="Comfy 无需填写；即梦填 Bearer 后的 session"
+                placeholder="Comfy 无需填写；即梦填 session；Muse 可填 m2a_ 开头的密钥"
                 autocomplete="off"
               />
             </div>
@@ -1819,6 +1880,7 @@
           else if (btn.dataset.tab === "media") loadMedia();
           else if (btn.dataset.tab === "runninghub") loadRunningHubConfig();
           else if (btn.dataset.tab === "comfyui") loadComfyUIConfig();
+          else if (btn.dataset.tab === "muse2api") loadMuse2APIConfig();
           else if (btn.dataset.tab === "test") loadTestTab();
         });
       });
@@ -3417,6 +3479,176 @@
         } catch {}
       });
 
+      // —— Muse2API ——
+      let museState = {
+        baseUrl: "http://127.0.0.1:18610",
+        defaultModel: "",
+        models: [],
+      };
+
+      function museMsg(text, isError) {
+        const msgEl = document.getElementById("muse-config-msg");
+        const errorEl = document.getElementById("muse-config-error");
+        if (msgEl) {
+          msgEl.style.display = text && !isError ? "block" : "none";
+          if (!isError) msgEl.textContent = text || "";
+        }
+        if (errorEl) errorEl.textContent = isError ? text || "" : "";
+      }
+
+      function applyMuse2APIData(data) {
+        museState = {
+          baseUrl: data.baseUrl || "http://127.0.0.1:18610",
+          defaultModel: data.defaultModel || "",
+          models: Array.isArray(data.models) ? data.models : [],
+        };
+        const baseInput = document.getElementById("muse-base-url");
+        if (baseInput) baseInput.value = museState.baseUrl;
+
+        const preview = document.getElementById("muse-key-preview");
+        if (preview) {
+          preview.textContent = data.hasApiKey
+            ? `当前已配置：${data.apiKeyPreview || "****"}`
+            : data.envApiKey
+              ? "未保存到管理台，将使用环境变量 MUSE2API_KEY"
+              : "当前未配置（保存后写库，或用环境变量 MUSE2API_KEY）";
+        }
+
+        const sel = document.getElementById("muse-default-model");
+        if (sel) {
+          const enabled = museState.models.filter((m) => m.enabled !== false);
+          sel.innerHTML =
+            `<option value="">不设置（请求必须传 model）</option>` +
+            enabled
+              .map(
+                (m) =>
+                  `<option value="${escapeHtml(m.id)}" ${
+                    m.id === museState.defaultModel ? "selected" : ""
+                  }>${escapeHtml(m.id + " · " + m.name)}</option>`
+              )
+              .join("");
+        }
+        renderMuseModels();
+      }
+
+      function renderMuseModels() {
+        const el = document.getElementById("muse-models-list");
+        if (!el) return;
+        if (!museState.models.length) {
+          el.innerHTML = `<div class="rh-empty">暂无模型</div>`;
+          return;
+        }
+        el.innerHTML = museState.models
+          .map(
+            (m) => `
+              <div class="rh-entry">
+                <div class="meta">
+                  <div class="title">${escapeHtml(m.id)}</div>
+                  <div class="id">${escapeHtml(m.upstream || "")} · ${escapeHtml(m.type || "")}</div>
+                  <div class="analysis ok">${escapeHtml(m.description || "")}</div>
+                </div>
+                <div class="actions">
+                  <label class="toggle">
+                    <input type="checkbox" data-muse-id="${escapeHtml(m.id)}" ${
+                      m.enabled !== false ? "checked" : ""
+                    } />
+                    启用
+                  </label>
+                </div>
+              </div>`
+          )
+          .join("");
+        el.querySelectorAll("[data-muse-id]").forEach((input) => {
+          input.addEventListener("change", () => {
+            museState.models = museState.models.map((m) =>
+              m.id === input.getAttribute("data-muse-id")
+                ? { ...m, enabled: input.checked }
+                : m
+            );
+            void saveMuse2APIConfig(true);
+          });
+        });
+      }
+
+      async function loadMuse2APIConfig() {
+        museMsg("");
+        try {
+          const res = await fetch("/dashboard/muse2api", { credentials: "include" });
+          if (!res.ok) {
+            museMsg("加载失败，请重新登录", true);
+            return;
+          }
+          applyMuse2APIData(await res.json());
+        } catch (e) {
+          museMsg("加载失败", true);
+        }
+      }
+
+      async function saveMuse2APIConfig(silent) {
+        if (!silent) museMsg("");
+        try {
+          const apiKeyInput = document.getElementById("muse-api-key");
+          const res = await fetch("/dashboard/muse2api", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseUrl: document.getElementById("muse-base-url").value,
+              apiKey: apiKeyInput ? apiKeyInput.value : "",
+              defaultModel: document.getElementById("muse-default-model").value,
+              models: museState.models.map((m) => ({ id: m.id, enabled: m.enabled !== false })),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "保存失败");
+          applyMuse2APIData(data.data || data);
+          if (apiKeyInput) apiKeyInput.value = "";
+          if (!silent) museMsg(data.message || "Muse2API 配置已保存");
+        } catch (e) {
+          museMsg(e.message || "保存失败", true);
+        }
+      }
+
+      async function pingMuse2API() {
+        museMsg("");
+        try {
+          const apiKeyInput = document.getElementById("muse-api-key");
+          const res = await fetch("/dashboard/muse2api/ping", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseUrl: document.getElementById("muse-base-url").value,
+              apiKey: apiKeyInput ? apiKeyInput.value : "",
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "连通失败");
+          museMsg(data.message || "已连通");
+        } catch (e) {
+          museMsg(e.message || "连通失败", true);
+        }
+      }
+
+      async function clearMuse2APIKey() {
+        if (!confirm("确定清除管理台保存的 Muse2API 密钥？")) return;
+        museMsg("");
+        try {
+          const res = await fetch("/dashboard/muse2api", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clearApiKey: true }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "清除失败");
+          applyMuse2APIData(data.data || data);
+          museMsg("密钥已清除");
+        } catch (e) {
+          museMsg(e.message || "清除失败", true);
+        }
+      }
+
       // —— 接口测试 ——
       const TEST_LS = "imgtest:v1";
       const JIMENG_VIDEO_MODELS = [
@@ -3453,8 +3685,8 @@
       }
 
       async function loadTestTab() {
-        // 每次进入都刷新两侧目录，避免 Comfy/RH 刚导入后测试页模型列表过期
-        await Promise.all([loadRunningHubConfig(), loadComfyUIConfig()]);
+        // 每次进入都刷新各后端目录，避免刚导入后测试页模型列表过期
+        await Promise.all([loadRunningHubConfig(), loadComfyUIConfig(), loadMuse2APIConfig()]);
         populateTestModels();
         if (testInited) {
           updateTestImagesHintForModel();
@@ -3560,6 +3792,12 @@
         if (!hint) return;
         const model = resolveTestModelId();
         const selected = testImageItems.length;
+        if (String(model || "").startsWith("muse:")) {
+          hint.textContent = selected
+            ? `已选 ${selected} 个参考素材（Muse2API 最多 10 个，按顺序上传）`
+            : "Muse2API 可传参考图（images，最多 10 个）；无需即梦 session，用管理台密钥或 m2a_ 开头的 Key。";
+          return;
+        }
         if (isTestVideoMode()) {
           const jimengVideo = !model || String(model).startsWith("jimeng-video");
           if (jimengVideo) {
@@ -3613,6 +3851,15 @@
                 )}</option>`
               );
             });
+          (museState.models || [])
+            .filter((m) => m.enabled !== false && m.type === "video")
+            .forEach((m) => {
+              opts.push(
+                `<option value="${escapeHtml(m.id)}">${escapeHtml(
+                  m.id + " · " + (m.name || "Muse2API")
+                )}</option>`
+              );
+            });
         } else {
           const push = (kind, list) => {
             list
@@ -3638,6 +3885,15 @@
                 )}</option>`
               );
             });
+          (museState.models || [])
+            .filter((m) => m.enabled !== false && m.type === "image")
+            .forEach((m) => {
+              opts.push(
+                `<option value="${escapeHtml(m.id)}">${escapeHtml(
+                  m.id + " · " + (m.name || "Muse2API")
+                )}</option>`
+              );
+            });
         }
         if (!opts.length) {
           select.innerHTML = `<option value="">（无已启用模型，可在下方手填 model）</option>`;
@@ -3649,7 +3905,7 @@
             saved ||
             (isTestVideoMode()
               ? JIMENG_VIDEO_MODELS[0]
-              : rhState.defaultModel || comfyState.defaultModel);
+              : rhState.defaultModel || comfyState.defaultModel || museState.defaultModel);
           if (want && [...select.options].some((o) => o.value === want)) {
             select.value = want;
           }

@@ -19,6 +19,18 @@ import {
 } from '@/api/controllers/comfyui.ts';
 import { isComfyUIModelEnabled, resolveComfyUIEntry } from '@/lib/comfyui-config.ts';
 import {
+    encodeMuseTaskId,
+    fetchMuseMedia,
+    isMuseTaskId,
+    parseMuseTaskId,
+    queryMuseVideo,
+    ratioFromOpenAISize,
+    resolveMuse2APIAuth,
+    submitMuseVideo,
+    waitForMuseVideo,
+} from '@/api/controllers/muse2api.ts';
+import { isMuse2APIModel, looksLikeMuse2APIKey, parseMuse2APIModel } from '@/lib/muse2api-config.ts';
+import {
     collectOpenAIInputAudios,
     collectOpenAIInputImages,
     collectOpenAIInputVideos,
@@ -156,6 +168,76 @@ async function submitComfyVideoJob(request: Request) {
     };
 }
 
+// ==================== Muse2API ====================
+
+function resolveMuseHeaderToken(request: Request) {
+    const tokens = tokenSplit(request.headers.authorization || "");
+    return tokens.find((token) => looksLikeMuse2APIKey(token)) || "";
+}
+
+/** muse2api 的 size 直接吃 16:9 / 1024x1024，这里把 ratio / size 互补一下 */
+function resolveMuseFrameParams(body: Record<string, any>) {
+    const size = typeof body.size === "string" ? body.size.trim() : "";
+    const ratio = typeof body.ratio === "string" ? body.ratio.trim() : "";
+    const extraAspect = typeof body.aspect_ratio === "string" ? body.aspect_ratio.trim() : "";
+    const aspectRatio = ratio || extraAspect || ratioFromOpenAISize(size);
+    return { size: size || ratio || extraAspect, aspectRatio };
+}
+
+function resolveVideoModel(body: Record<string, any>) {
+    const bodyModel = typeof body.model === "string" ? body.model.trim() : "";
+    if (bodyModel) return bodyModel;
+    const museConfig = db.getMuse2APIConfig();
+    if (parseMuse2APIModel(museConfig.defaultModel)?.type === "video") {
+        return museConfig.defaultModel;
+    }
+    const comfyConfig = db.getComfyUIConfig();
+    if (isComfyUIModel(comfyConfig.defaultModel)) return comfyConfig.defaultModel;
+    return DEFAULT_MODEL;
+}
+
+async function submitMuseVideoJob(request: Request, model: string) {
+    const body = request.body || {};
+    const prompt = String(body.prompt || "").trim();
+    if (!prompt) {
+        throw new APIException(EX.API_REQUEST_PARAMS_INVALID, "prompt 不能为空");
+    }
+    const config = db.getMuse2APIConfig();
+    const headerToken = resolveMuseHeaderToken(request);
+    const baseUrl = typeof body.base_url === "string" ? body.base_url : config.baseUrl;
+    const auth = resolveMuse2APIAuth(config, { baseUrl, headerToken });
+    const { size, aspectRatio } = resolveMuseFrameParams(body);
+    const timeoutRaw = Number(body.timeout);
+
+    const taskId = await submitMuseVideo(
+        model,
+        prompt,
+        {
+            images: collectVideoFrameSources(request, body),
+            duration: resolveVideoDuration(body),
+            size,
+            aspectRatio,
+            resolution: typeof body.resolution === "string" ? body.resolution.trim() : "",
+            timeout:
+                Number.isFinite(timeoutRaw) && timeoutRaw > 0
+                    ? Math.min(600, Math.floor(timeoutRaw))
+                    : undefined,
+            baseUrl: auth.baseUrl,
+            headerToken,
+        },
+        config
+    );
+
+    return {
+        taskId,
+        prompt,
+        config,
+        headerToken,
+        baseUrl: auth.baseUrl,
+        apiKey: auth.apiKey,
+    };
+}
+
 export default {
 
     prefix: '/v1/videos',
@@ -176,11 +258,29 @@ export default {
                 .validate('body.input_reference', v => _.isUndefined(v) || _.isString(v) || _.isArray(v));
 
             const body = request.body || {};
-            const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : DEFAULT_MODEL;
+            const model = resolveVideoModel(body);
 
             // ComfyUI：异步入队，立刻返回 prompt_id（官方用法，避免 HTTP 长连接超时）
             if (isComfyUIModel(model)) {
                 return submitComfyVideoJob(request);
+            }
+
+            // Muse2API：异步任务，立刻返回 muse-{task_id}
+            if (isMuse2APIModel(model)) {
+                const submitted = await submitMuseVideoJob(request, model);
+                try {
+                    db.recordCall(submitted.apiKey, model, 0);
+                } catch (e) {
+                    // 忽略数据库错误
+                }
+                return {
+                    id: encodeMuseTaskId(submitted.taskId),
+                    object: "video",
+                    status: "in_progress",
+                    model,
+                    created_at: util.unixTimestamp(),
+                    backend: "muse2api",
+                };
             }
 
             request.validate('headers.authorization', _.isString);
@@ -226,18 +326,50 @@ export default {
                 .validate('body.image', v => _.isUndefined(v) || _.isString(v) || _.isArray(v))
                 .validate('body.images', v => _.isUndefined(v) || _.isArray(v))
                 .validate('body.input_reference', v => _.isUndefined(v) || _.isString(v) || _.isArray(v))
-                .validate('body.response_format', v => _.isUndefined(v) || _.isString(v))
-                .validate('headers.authorization', _.isString);
+                .validate('body.response_format', v => _.isUndefined(v) || _.isString(v));
 
-            const token = pickToken(request);
             const body = request.body || {};
+            const model = resolveVideoModel(body);
             const {
-                model = DEFAULT_MODEL,
                 prompt,
                 ratio,
                 resolution,
                 response_format = "url"
             } = body;
+
+            // Muse2API：提交后同步等待结果（长请求，客户端可改用 /v1/videos + 轮询）
+            if (isMuse2APIModel(model)) {
+                const submitted = await submitMuseVideoJob(request, model);
+                const museUrl = await waitForMuseVideo(submitted.taskId, submitted.config, {
+                    baseUrl: submitted.baseUrl,
+                    headerToken: submitted.headerToken,
+                });
+                try {
+                    db.recordCall(submitted.apiKey, model, 0);
+                    db.saveMedia('video', museUrl, model, submitted.prompt, submitted.apiKey);
+                } catch (e) {
+                    // 忽略数据库错误
+                }
+                if (response_format === "b64_json") {
+                    return {
+                        created: util.unixTimestamp(),
+                        data: [{
+                            b64_json: await util.fetchFileBASE64(museUrl),
+                            revised_prompt: submitted.prompt
+                        }]
+                    };
+                }
+                return {
+                    created: util.unixTimestamp(),
+                    data: [{
+                        url: museUrl,
+                        revised_prompt: submitted.prompt
+                    }]
+                };
+            }
+
+            request.validate('headers.authorization', _.isString);
+            const token = pickToken(request);
             const duration = resolveVideoDuration(body);
             const filePaths = collectVideoFrameSources(request, body);
 
@@ -297,6 +429,23 @@ export default {
                 return new Response(buffer, { type: "mp4" });
             }
 
+            if (isMuseTaskId(historyId)) {
+                const taskId = parseMuseTaskId(historyId)!;
+                const config = db.getMuse2APIConfig();
+                const state = await queryMuseVideo(taskId, config, {
+                    baseUrl: config.baseUrl,
+                    headerToken: resolveMuseHeaderToken(request),
+                });
+                if (state.status === "failed") {
+                    throw new APIException(EX.API_VIDEO_GENERATION_FAILED, state.message);
+                }
+                if (state.status !== "completed") {
+                    throw new APIException(EX.API_VIDEO_GENERATION_FAILED, "视频尚未生成完成");
+                }
+                const buffer = await fetchMuseMedia(state.url);
+                return new Response(buffer, { type: "mp4" });
+            }
+
             request.validate('headers.authorization', _.isString);
             const token = pickToken(request);
             const state = await queryVideoGenerationStatus(historyId, token);
@@ -344,6 +493,42 @@ export default {
                     status: "in_progress",
                     model: state.model,
                     backend: "comfyui",
+                };
+            }
+
+            if (isMuseTaskId(historyId)) {
+                const taskId = parseMuseTaskId(historyId)!;
+                const config = db.getMuse2APIConfig();
+                const state = await queryMuseVideo(taskId, config, {
+                    baseUrl: config.baseUrl,
+                    headerToken: resolveMuseHeaderToken(request),
+                });
+                if (state.status === "completed") {
+                    return {
+                        id: String(historyId),
+                        object: "video",
+                        status: "completed",
+                        progress: 100,
+                        url: state.url,
+                        result: { url: state.url },
+                        backend: "muse2api",
+                    };
+                }
+                if (state.status === "failed") {
+                    return {
+                        id: String(historyId),
+                        object: "video",
+                        status: "failed",
+                        error: { message: state.message },
+                        backend: "muse2api",
+                    };
+                }
+                return {
+                    id: String(historyId),
+                    object: "video",
+                    status: "in_progress",
+                    progress: state.progress ?? 0,
+                    backend: "muse2api",
                 };
             }
 
