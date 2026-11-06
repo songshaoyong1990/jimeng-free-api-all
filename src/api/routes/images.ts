@@ -403,17 +403,33 @@ async function handleMuseImages(request: Request, endpoint: "generations" | "edi
   const body = request.body || {};
   const museConfig = db.getMuse2APIConfig();
   const openai = normalizeOpenAIImageBody(body);
-  const imageList = collectOpenAIInputImages(body, request.files);
+  // muse2api 的 images 数组允许混放图片/视频/音频/文档，按 MIME 自动识别。
+  // 顺序保持：参考图 → 参考视频 → 参考音频，便于上游按顺序解释素材用途。
+  const referenceImage =
+    typeof body.reference_image === "string" ? body.reference_image.trim() : "";
+  const referenceList = _.uniq([
+    ...collectOpenAIInputImages(body, request.files),
+    ...(referenceImage ? [referenceImage] : []),
+    ...collectOpenAIInputVideos(body, request.files),
+    ...collectOpenAIInputAudios(body, request.files),
+    ...(Array.isArray(body.files)
+      ? body.files
+          .map((item: any) =>
+            typeof item === "string" ? item : item?.url || item?.file_url || ""
+          )
+          .filter((value: any) => typeof value === "string" && value.trim())
+      : []),
+  ]);
   const prompt =
     String(body.prompt || "").trim() ||
-    (imageList.length ? "参考此图片并进行生图创作" : "");
+    (referenceList.length ? "参考这些素材并生成图片" : "");
   if (!prompt) {
     throw new APIException(EX.API_REQUEST_PARAMS_INVALID, "prompt 不能为空");
   }
-  if (endpoint === "edits" && !imageList.length) {
+  if (endpoint === "edits" && !referenceList.length) {
     throw new APIException(
       EX.API_REQUEST_PARAMS_INVALID,
-      "edits 需要至少一张参考图（image / images / multipart）"
+      "edits 需要至少一个参考素材（image / images / video / audio / multipart）"
     );
   }
 
@@ -440,18 +456,19 @@ async function handleMuseImages(request: Request, endpoint: "generations" | "edi
   const timeout = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? Math.min(600, Math.floor(timeoutRaw)) : undefined;
 
   logger.info(
-    `[Images] /${endpoint} backend=Muse2API model=${model} base=${auth.baseUrl} n=${openai.n} size=${size || "-"} ratio=${aspectRatio || "-"} images=${imageList.length} response_format=${openai.responseFormat} auth=${headerToken ? "header" : museConfig.apiKey ? "dashboard" : "env"}`
+    `[Images] /${endpoint} backend=Muse2API model=${model} base=${auth.baseUrl} n=${openai.n} size=${size || "-"} ratio=${aspectRatio || "-"} refs=${referenceList.length} response_format=${openai.responseFormat} auth=${headerToken ? "header" : museConfig.apiKey ? "dashboard" : "env"}`
   );
 
   const imageUrls = await generateMuseImages(
     model,
     prompt,
     {
-      images: imageList,
+      images: referenceList,
       size,
       aspectRatio,
       n: openai.n,
       timeout,
+      extra: typeof body.extra === "string" ? body.extra : undefined,
       baseUrl: auth.baseUrl,
       headerToken,
     },

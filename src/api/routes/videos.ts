@@ -99,6 +99,60 @@ function collectVideoFrameSources(request: Request, body: Record<string, any> = 
     return _.uniq(out);
 }
 
+/**
+ * Muse2API 的参考素材允许混放图片/视频/音频/文档（上游按 MIME 识别），
+ * 这里保持“首帧/尾帧 → 其他图片 → 参考视频 → 参考音频 → 文档”的顺序。
+ */
+function collectMuseReferenceSources(request: Request, body: Record<string, any> = {}) {
+    const out: string[] = [];
+    const push = (value: unknown) => {
+        if (typeof value === "string" && value.trim()) {
+            out.push(value.trim());
+            return;
+        }
+        if (!value || typeof value !== "object" || Array.isArray(value)) return;
+        const record = value as Record<string, any>;
+        const url = record.url || record.image_url || record.video_url || record.audio_url || record.file_url;
+        if (typeof url === "string" && url.trim()) out.push(url.trim());
+        else if (typeof record.b64_json === "string" && record.b64_json.trim()) out.push(record.b64_json.trim());
+        else if (typeof record.data === "string" && record.data.trim()) out.push(record.data.trim());
+    };
+    const pushMany = (value: unknown) => {
+        if (Array.isArray(value)) value.forEach(push);
+        else push(value);
+    };
+    // 首尾帧必须排在最前：上游默认把第一张图当作起始画面。
+    pushMany(body.first_frame);
+    pushMany(body.last_frame);
+    pushMany(body.file_paths);
+    pushMany(body.filePaths);
+    pushMany(body.image);
+    pushMany(body.images);
+    pushMany(body.image_url);
+    pushMany(body.input_reference);
+    pushMany(body.videos);
+    pushMany(body.audios);
+    pushMany(body.files);
+
+    const files = (request.files || {}) as Record<string, any>;
+    const pushFiles = (pattern: RegExp) => {
+        for (const [key, value] of Object.entries(files)) {
+            if (!pattern.test(key) && key !== "0") continue;
+            const list = Array.isArray(value) ? value : [value];
+            for (const item of list) {
+                const filePath = item?.filepath || item?.path;
+                if (typeof filePath === "string" && filePath.trim()) out.push(filePath.trim());
+            }
+        }
+    };
+    pushFiles(/^(image|images|first|last)/i);
+    pushFiles(/^(video|videos)/i);
+    pushFiles(/^(audio|audios)/i);
+    pushFiles(/^(file|files)/i);
+    // 不去重：首帧与尾帧允许是同一张图，去重会让上游少一张参考。
+    return out;
+}
+
 function mapQueryToOpenAiStatus(result: Awaited<ReturnType<typeof queryVideoGenerationStatus>>) {
     if (result.status === "completed") {
         return { status: "completed" as const, url: result.url };
@@ -208,13 +262,17 @@ async function submitMuseVideoJob(request: Request, model: string) {
     const auth = resolveMuse2APIAuth(config, { baseUrl, headerToken });
     const { size, aspectRatio } = resolveMuseFrameParams(body);
     const timeoutRaw = Number(body.timeout);
+    // 不指定时让上游用它自己的默认时长（muse2api 默认 6 秒），不要用即梦的 10 秒覆盖。
+    const durationRaw = body.duration != null && body.duration !== "" ? body.duration : body.seconds;
+    const durationNum = Number(durationRaw);
+    const duration = Number.isFinite(durationNum) && durationNum > 0 ? durationNum : undefined;
 
     const taskId = await submitMuseVideo(
         model,
         prompt,
         {
-            images: collectVideoFrameSources(request, body),
-            duration: resolveVideoDuration(body),
+            images: collectMuseReferenceSources(request, body),
+            duration,
             size,
             aspectRatio,
             resolution: typeof body.resolution === "string" ? body.resolution.trim() : "",
@@ -222,6 +280,7 @@ async function submitMuseVideoJob(request: Request, model: string) {
                 Number.isFinite(timeoutRaw) && timeoutRaw > 0
                     ? Math.min(600, Math.floor(timeoutRaw))
                     : undefined,
+            extra: typeof body.extra === "string" ? body.extra : undefined,
             baseUrl: auth.baseUrl,
             headerToken,
         },
@@ -253,9 +312,12 @@ export default {
                 .validate('body.duration', asOptionalNumber)
                 .validate('body.seconds', asOptionalNumber)
                 .validate('body.file_paths', v => _.isUndefined(v) || _.isArray(v) || _.isString(v))
-                .validate('body.image', v => _.isUndefined(v) || _.isString(v) || _.isArray(v))
+                .validate('body.image', v => _.isUndefined(v) || _.isString(v) || _.isArray(v) || _.isObject(v))
                 .validate('body.images', v => _.isUndefined(v) || _.isArray(v))
-                .validate('body.input_reference', v => _.isUndefined(v) || _.isString(v) || _.isArray(v));
+                .validate('body.input_reference', v => _.isUndefined(v) || _.isString(v) || _.isArray(v))
+                .validate('body.videos', v => _.isUndefined(v) || _.isArray(v))
+                .validate('body.audios', v => _.isUndefined(v) || _.isArray(v))
+                .validate('body.files', v => _.isUndefined(v) || _.isArray(v));
 
             const body = request.body || {};
             const model = resolveVideoModel(body);
@@ -323,9 +385,12 @@ export default {
                 .validate('body.duration', asOptionalNumber)
                 .validate('body.seconds', asOptionalNumber)
                 .validate('body.file_paths', v => _.isUndefined(v) || _.isArray(v) || _.isString(v))
-                .validate('body.image', v => _.isUndefined(v) || _.isString(v) || _.isArray(v))
+                .validate('body.image', v => _.isUndefined(v) || _.isString(v) || _.isArray(v) || _.isObject(v))
                 .validate('body.images', v => _.isUndefined(v) || _.isArray(v))
                 .validate('body.input_reference', v => _.isUndefined(v) || _.isString(v) || _.isArray(v))
+                .validate('body.videos', v => _.isUndefined(v) || _.isArray(v))
+                .validate('body.audios', v => _.isUndefined(v) || _.isArray(v))
+                .validate('body.files', v => _.isUndefined(v) || _.isArray(v))
                 .validate('body.response_format', v => _.isUndefined(v) || _.isString(v));
 
             const body = request.body || {};

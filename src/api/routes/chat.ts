@@ -8,7 +8,7 @@ import {
     createMuseChatCompletion,
     createMuseChatStream,
 } from '@/api/controllers/muse2api.ts';
-import { isMuse2APIChatModel, looksLikeMuse2APIKey } from '@/lib/muse2api-config.ts';
+import { isMuse2APIChatModel, isMuse2APIModel, looksLikeMuse2APIKey } from '@/lib/muse2api-config.ts';
 import db from '@/lib/database.ts';
 import APIException from '@/lib/exceptions/APIException.ts';
 import EX from '@/api/consts/exceptions.ts';
@@ -33,7 +33,13 @@ export default {
             const { model, messages, stream } = request.body;
 
             // Muse2API：文本 / 代码对话，直接透传 OpenAI Chat Completions
-            if (isMuse2APIChatModel(model)) {
+            if (isMuse2APIModel(model)) {
+                if (!isMuse2APIChatModel(model)) {
+                    throw new APIException(
+                        EX.API_REQUEST_PARAMS_INVALID,
+                        'muse2api 对话仅支持 muse:spark（muse:image / muse:video 请使用对应接口）'
+                    );
+                }
                 const config = db.getMuse2APIConfig();
                 const headerToken = resolveMuseHeaderToken(request.headers.authorization);
                 const baseUrl = typeof request.body.base_url === 'string' && request.body.base_url.trim()
